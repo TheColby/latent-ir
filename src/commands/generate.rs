@@ -3,18 +3,49 @@ use chrono::Utc;
 
 use crate::cli::{ChannelFormatArg, GenerateArgs};
 use crate::core::analysis::IrAnalyzer;
+use crate::core::conditioning::{
+    AudioEncoder, LearnedAudioEncoder, LearnedTextEncoder, TextEncoder,
+};
 use crate::core::descriptors::{ChannelFormat, DescriptorSet};
 use crate::core::generator::{IrGenerator, ProceduralIrGenerator};
 use crate::core::presets;
 use crate::core::semantics::SemanticResolver;
-use crate::core::util::{self, metadata::GenerationMetadata};
+use crate::core::util::{
+    self,
+    metadata::{ConditioningTrace, GenerationMetadata},
+};
 
 pub fn run(args: GenerateArgs) -> Result<()> {
     let mut descriptor = DescriptorSet::default();
+    let mut conditioning = ConditioningTrace::default();
 
     if let Some(name) = args.preset.as_deref() {
         descriptor =
             presets::resolve_preset(name).with_context(|| format!("unknown preset '{name}'"))?;
+    }
+
+    if let (Some(model_path), Some(prompt)) =
+        (args.text_encoder_model.as_deref(), args.prompt.as_deref())
+    {
+        let model = LearnedTextEncoder::from_json_file(model_path)?;
+        let delta = model.infer_delta_from_prompt(prompt)?;
+        delta.apply_to(&mut descriptor, 1.0);
+        conditioning.text_encoder_model = Some(model_path.display().to_string());
+        conditioning.text_delta = Some(delta);
+    }
+
+    if let (Some(model_path), Some(reference_audio)) = (
+        args.audio_encoder_model.as_deref(),
+        args.reference_audio.as_deref(),
+    ) {
+        let reference = util::audio::read_wav_f32(reference_audio)
+            .with_context(|| format!("failed to read {}", reference_audio.display()))?;
+        let model = LearnedAudioEncoder::from_json_file(model_path)?;
+        let delta = model.infer_delta_from_audio(&reference.channels, reference.sample_rate)?;
+        delta.apply_to(&mut descriptor, 1.0);
+        conditioning.audio_encoder_model = Some(model_path.display().to_string());
+        conditioning.reference_audio = Some(reference_audio.display().to_string());
+        conditioning.audio_delta = Some(delta);
     }
 
     if let Some(prompt) = args.prompt.as_deref() {
@@ -51,6 +82,7 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         seed: args.seed,
         prompt: args.prompt,
         preset: args.preset,
+        conditioning,
         sample_rate: args.sample_rate,
         descriptor,
         warnings: analysis.warnings.clone(),

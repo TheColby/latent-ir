@@ -1,0 +1,97 @@
+# Learned Encoders
+
+`latent-ir` supports learned descriptor conditioning through two model types loaded from JSON:
+
+- `LearnedTextEncoderModel`
+- `LearnedAudioEncoderModel`
+
+These are intentionally lightweight and fully inspectable for v0.1.
+
+## Text Encoder
+
+Model fields:
+
+- `model_version`
+- `embedding_dim`
+- `token_embeddings`: token -> embedding vector
+- `unknown_embedding`
+- `projection`: linear projection from embedding -> descriptor deltas
+- `bias`
+- `output_scale`
+
+Inference flow:
+
+1. tokenize prompt
+2. average token embeddings
+3. project embedding to `DescriptorDelta`
+4. apply delta to `DescriptorSet`
+
+## Audio Encoder
+
+Model fields:
+
+- `model_version`
+- `feature_names`
+- `input_mean`, `input_std`
+- `hidden_weights`, `hidden_bias` (single hidden tanh layer)
+- `projection`, `bias`, `output_scale`
+
+Audio frontend features (v0.1):
+
+- duration
+- peak
+- RMS
+- zero crossing rate
+- predelay estimate (normalized)
+- early energy ratio
+- low/mid/high energy ratios
+- normalized centroid proxy
+
+Inference flow:
+
+1. extract feature vector from reference audio
+2. normalize features
+3. run hidden layer + tanh
+4. project hidden state to `DescriptorDelta`
+5. apply delta to `DescriptorSet`
+
+## Scope Notes
+
+- These are learned weight paths, not large foundation models.
+- Models are deterministic and file-driven.
+- The CLI still supports rule-based semantics and explicit overrides; those remain first-class and composable.
+
+## Training Utility
+
+`latent-ir` includes:
+
+- `train-encoder text`
+- `train-encoder audio`
+
+### Text dataset format
+
+JSON array:
+
+```json
+[
+  {
+    "prompt": "dark stone cathedral",
+    "descriptor": { "... DescriptorSet fields ..." : "..." }
+  }
+]
+```
+
+### Audio dataset format
+
+JSON array:
+
+```json
+[
+  {
+    "audio_path": "relative/or/absolute/path.wav",
+    "descriptor": { "... DescriptorSet fields ..." : "..." }
+  }
+]
+```
+
+Audio paths are resolved relative to the dataset file when not absolute.

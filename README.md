@@ -21,6 +21,8 @@ Most reverbs expose fixed presets or static measured spaces. `latent-ir` treats 
 - Offline convolution rendering (`render`)
 - Descriptor sampling utilities (`sample`)
 - Built-in preset inspection and retrieval (`preset`)
+- Model fitting utility for lightweight learned encoders (`train-encoder`)
+- Learned text/audio conditioning encoders loaded from JSON model files
 - Deterministic generation via explicit seed
 - JSON metadata + analysis output for reproducibility
 
@@ -105,6 +107,24 @@ cargo run -- generate \
   --output out/cathedral_ir.wav
 ```
 
+Generate with learned text encoder:
+
+```bash
+cargo run -- generate \
+  --prompt "dark steel cathedral" \
+  --text-encoder-model examples/models/text_encoder_v1.json \
+  --output out/learned_text_ir.wav
+```
+
+Generate with learned audio encoder from reference material:
+
+```bash
+cargo run -- generate \
+  --reference-audio references/hall_ir.wav \
+  --audio-encoder-model examples/models/audio_encoder_v1.json \
+  --output out/learned_audio_ir.wav
+```
+
 Generate from preset + overrides:
 
 ```bash
@@ -148,7 +168,7 @@ cargo run -- preset dark_stone_cathedral --json
 ## Command Reference
 
 - `generate`
-  - Inputs: optional `--prompt`, optional `--preset`, descriptor overrides (`--duration`, `--t60`, `--predelay-ms`, `--edt`, etc.), channel format, seed
+  - Inputs: optional `--prompt`, optional `--preset`, optional learned encoders (`--text-encoder-model`, `--audio-encoder-model`, `--reference-audio`), descriptor overrides (`--duration`, `--t60`, `--predelay-ms`, `--edt`, etc.), channel format, seed
   - Outputs: generated IR WAV + companion JSON metadata (or custom `--metadata-out`), optional analysis JSON via `--json-analysis-out`
 - `analyze`
   - Inputs: IR WAV
@@ -165,6 +185,28 @@ cargo run -- preset dark_stone_cathedral --json
 - `preset`
   - Inputs: optional preset name
   - Outputs: preset list or descriptor JSON
+- `train-encoder`
+  - Modes: `text`, `audio`
+  - Outputs: learned model JSON compatible with `--text-encoder-model` / `--audio-encoder-model`
+
+Train text encoder from labeled prompt data:
+
+```bash
+cargo run -- train-encoder text \
+  --dataset datasets/text_pairs.json \
+  --output models/text_encoder_v1.json \
+  --max-vocab 512 \
+  --epochs 800
+```
+
+Train audio encoder from labeled reference-audio data:
+
+```bash
+cargo run -- train-encoder audio \
+  --dataset datasets/audio_pairs.json \
+  --output models/audio_encoder_v1.json \
+  --epochs 1000
+```
 
 ## Limitations and Honesty
 
@@ -189,12 +231,23 @@ cargo run -- preset dark_stone_cathedral --json
 
 This keeps results controllable and reproducible while still opening a path to modern generative models.
 
+## Learned Encoder Models (v0.1)
+
+`latent-ir` now includes first-pass learned conditioning hooks:
+
+- `LearnedTextEncoder`: token embedding table + learned linear projection to descriptor deltas
+- `LearnedAudioEncoder`: engineered audio feature frontend + learned MLP + projection to descriptor deltas
+
+Both are loaded from JSON model files and run entirely in Rust. Example model files are provided in `examples/models/`.
+Training CLI support is provided via `train-encoder`.
+
 ## Roadmap
 
 See:
 
 - `docs/architecture.md`
 - `docs/roadmap.md`
+- `docs/learned-encoders.md`
 
 ## Contributing
 
@@ -230,3 +283,15 @@ Built-in presets:
 - `glass_corridor`
 - `frozen_plate`
 - `impossible_infinite_tunnel`
+
+## Attribution
+
+`latent-ir` is developed by the open-source contributor community.
+
+If you use this project in research, products, demos, or educational material, attribution to the `latent-ir` project and repository is appreciated.
+
+## License
+
+This project is licensed under the MIT License.
+
+See [LICENSE](LICENSE) for the full license text.

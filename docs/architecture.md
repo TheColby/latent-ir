@@ -9,6 +9,7 @@ Core principle:
 **ML chooses acoustic behavior, DSP builds and validates the IR.**
 
 In v0, the ML side is represented by explicit extension interfaces and rule-based semantic conditioning. DSP is fully active and generates real outputs.
+v0.1 also includes learned text/audio encoder hooks that load small model weights from JSON and infer descriptor deltas directly in the CLI pipeline.
 
 ## Descriptor-Conditioned Generation
 
@@ -45,11 +46,14 @@ This is intentionally practical, deterministic, and auditable.
 
 This is explicitly not a learned text model. It exists to validate CLI flow and descriptor-conditioning architecture while keeping outputs reproducible.
 
+In parallel, `LearnedTextEncoder` can be supplied in `generate` to apply learned prompt-conditioned descriptor deltas before semantic rules and explicit overrides.
+
 ## Future ML Module Interfaces
 
 Planned extension path:
 
 - `ConditioningModel` traits for text/audio/reference inference
+- richer learned text/audio models (ONNX, safetensors, or custom backends)
 - learned encoders producing descriptor priors or latent embeddings
 - latent -> descriptor projection with constraint checks
 - hybrid generator modes combining latent proposals with DSP enforcement

@@ -23,6 +23,8 @@ pub enum Commands {
     Sample(SampleArgs),
     /// List or inspect built-in presets.
     Preset(PresetArgs),
+    /// Train lightweight learned conditioning encoders from labeled data.
+    TrainEncoder(TrainEncoderArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -30,6 +32,18 @@ pub struct GenerateArgs {
     /// Optional semantic text prompt.
     #[arg(long)]
     pub prompt: Option<String>,
+
+    /// Path to a learned text encoder model JSON.
+    #[arg(long)]
+    pub text_encoder_model: Option<PathBuf>,
+
+    /// Path to reference audio used by learned audio conditioning.
+    #[arg(long)]
+    pub reference_audio: Option<PathBuf>,
+
+    /// Path to a learned audio encoder model JSON.
+    #[arg(long)]
+    pub audio_encoder_model: Option<PathBuf>,
 
     /// Optional built-in preset name.
     #[arg(long)]
@@ -161,6 +175,64 @@ pub struct PresetArgs {
     /// Emit JSON output.
     #[arg(long)]
     pub json: bool,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct TrainEncoderArgs {
+    #[command(subcommand)]
+    pub mode: TrainEncoderMode,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub enum TrainEncoderMode {
+    /// Train a prompt->descriptor text encoder model.
+    Text(TrainTextEncoderArgs),
+    /// Train a reference-audio->descriptor audio encoder model.
+    Audio(TrainAudioEncoderArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct TrainTextEncoderArgs {
+    /// Path to JSON dataset: [{\"prompt\":...,\"descriptor\":...}, ...]
+    #[arg(long)]
+    pub dataset: PathBuf,
+    /// Output model JSON path.
+    #[arg(short, long)]
+    pub output: PathBuf,
+    /// Max vocabulary size.
+    #[arg(long, default_value_t = 256)]
+    pub max_vocab: usize,
+    /// Minimum token count to keep in vocabulary.
+    #[arg(long, default_value_t = 1)]
+    pub min_count: usize,
+    /// Number of optimization epochs.
+    #[arg(long, default_value_t = 600)]
+    pub epochs: usize,
+    /// Learning rate.
+    #[arg(long, default_value_t = 0.05)]
+    pub lr: f32,
+    /// L2 regularization weight.
+    #[arg(long, default_value_t = 1e-4)]
+    pub l2: f32,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct TrainAudioEncoderArgs {
+    /// Path to JSON dataset: [{\"audio_path\":...,\"descriptor\":...}, ...]
+    #[arg(long)]
+    pub dataset: PathBuf,
+    /// Output model JSON path.
+    #[arg(short, long)]
+    pub output: PathBuf,
+    /// Number of optimization epochs.
+    #[arg(long, default_value_t = 800)]
+    pub epochs: usize,
+    /// Learning rate.
+    #[arg(long, default_value_t = 0.03)]
+    pub lr: f32,
+    /// L2 regularization weight.
+    #[arg(long, default_value_t = 1e-4)]
+    pub l2: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
