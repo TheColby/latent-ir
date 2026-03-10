@@ -137,34 +137,50 @@ fn convolve_fft_partitioned(x: &[f32], h: &[f32], partition_size: usize) -> Vec<
         h_parts_fft.push(buf);
     }
 
+    let zero_spec = vec![Complex32::new(0.0, 0.0); n_fft];
+    let mut x_history = vec![zero_spec; partitions];
+    let mut history_head = 0usize;
+
     let input_blocks = x.len().div_ceil(b);
+    let total_blocks = output_len.div_ceil(b);
     let mut out = vec![0.0f32; output_len];
+    let mut overlap = vec![0.0f32; b];
+    let inv_fft = 1.0f32 / n_fft as f32;
 
-    for blk in 0..input_blocks {
-        let start = blk * b;
-        let end = (start + b).min(x.len());
-
+    for blk in 0..total_blocks {
         let mut x_fft = vec![Complex32::new(0.0, 0.0); n_fft];
-        for (i, &v) in x[start..end].iter().enumerate() {
-            x_fft[i].re = v;
+        if blk < input_blocks {
+            let start = blk * b;
+            let end = (start + b).min(x.len());
+            for (i, &v) in x[start..end].iter().enumerate() {
+                x_fft[i].re = v;
+            }
         }
         fft.process(&mut x_fft);
+        history_head = (history_head + partitions - 1) % partitions;
+        x_history[history_head].copy_from_slice(&x_fft);
 
+        let mut y_fft = vec![Complex32::new(0.0, 0.0); n_fft];
         for (p, h_fft) in h_parts_fft.iter().enumerate() {
-            let mut y_fft = vec![Complex32::new(0.0, 0.0); n_fft];
+            let x_idx = (history_head + p) % partitions;
+            let x_hist = &x_history[x_idx];
             for i in 0..n_fft {
-                y_fft[i] = x_fft[i] * h_fft[i];
+                y_fft[i] += x_hist[i] * h_fft[i];
             }
-            ifft.process(&mut y_fft);
+        }
+        ifft.process(&mut y_fft);
 
-            let time_offset = (blk + p) * b;
-            for (i, c) in y_fft.iter().enumerate() {
-                let out_idx = time_offset + i;
-                if out_idx >= output_len {
-                    break;
-                }
-                out[out_idx] += c.re / n_fft as f32;
+        let time_offset = blk * b;
+        for i in 0..b {
+            let out_idx = time_offset + i;
+            if out_idx >= output_len {
+                break;
             }
+            out[out_idx] += y_fft[i].re * inv_fft + overlap[i];
+        }
+
+        for i in 0..b {
+            overlap[i] = y_fft[i + b].re * inv_fft;
         }
     }
 

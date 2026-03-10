@@ -2,4 +2,5 @@
 *.wav
 *.json
 !examples/*.json
+!examples/layouts/*.json
 .DS_Store

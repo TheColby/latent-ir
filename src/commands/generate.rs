@@ -12,6 +12,7 @@ use crate::core::descriptors::{ChannelFormat, DescriptorSet};
 use crate::core::generator::{generate_with_macro_trajectory, IrGenerator, ProceduralIrGenerator};
 use crate::core::perceptual::{MacroControls, MacroTrajectory};
 use crate::core::presets;
+use crate::core::spatial;
 use crate::core::util::{
     self,
     metadata::{ConditioningTrace, GenerationMetadata},
@@ -135,6 +136,15 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         None
     };
 
+    spatial::ensure_custom_layout_requested(
+        args.channels == ChannelFormatArg::Custom,
+        args.layout_json.is_some(),
+    )?;
+    if let Some(layout_path) = args.layout_json.as_deref() {
+        let layout = spatial::load_custom_layout_file(layout_path)?;
+        descriptor.spatial.set_custom_layout(layout);
+    }
+
     descriptor.apply_overrides(args.duration, args.t60, args.predelay_ms, args.edt);
     descriptor.apply_spectral_overrides(args.brightness, None, None, None);
     descriptor.apply_structure_overrides(args.early_density, args.late_density, args.diffusion);
@@ -156,13 +166,19 @@ pub fn run(args: GenerateArgs) -> Result<()> {
     util::audio::write_wav_f32(&args.output, args.sample_rate, &generated.channels)
         .with_context(|| format!("failed to write {}", args.output.display()))?;
 
-    let analysis = IrAnalyzer::default().analyze(&generated.channels, args.sample_rate);
-    let resolved_channel_format = descriptor.spatial.channel_format;
-    let channel_labels = resolved_channel_format
-        .channel_labels()
-        .into_iter()
-        .map(str::to_string)
-        .collect();
+    let channel_map = spatial::build_channel_map(&descriptor.spatial);
+    spatial::validate_channel_map(&channel_map, generated.channels.len())?;
+    let channel_map_path = args
+        .channel_map_out
+        .unwrap_or_else(|| spatial::companion_channel_map_path(&args.output));
+    util::json::write_pretty_json(&channel_map_path, &channel_map)?;
+
+    let analysis = IrAnalyzer::default().analyze_with_channel_map(
+        &generated.channels,
+        args.sample_rate,
+        Some(&channel_map),
+    );
+    let channel_labels = descriptor.spatial.resolved_channel_labels();
 
     let metadata = GenerationMetadata {
         schema_version: "latent-ir.generation.v1".to_string(),
@@ -174,12 +190,10 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         preset: args.preset,
         conditioning,
         sample_rate: args.sample_rate,
-        spatial_encoding: resolved_channel_format
-            .spatial_encoding()
-            .as_str()
-            .to_string(),
-        channel_format: resolved_channel_format.layout_name().to_string(),
+        spatial_encoding: channel_map.spatial_encoding.clone(),
+        channel_format: channel_map.layout_name.clone(),
         channel_labels,
+        channel_map_path: Some(channel_map_path.display().to_string()),
         descriptor,
         warnings: analysis.warnings.clone(),
         generated_at_utc: Utc::now(),
@@ -196,9 +210,14 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         println!("wrote analysis: {}", analysis_path.display());
     }
 
-    print_generation_metrics(&metadata.analysis, resolved_channel_format);
+    print_generation_metrics(
+        &metadata.analysis,
+        &metadata.channel_format,
+        &metadata.channel_labels,
+    );
     println!("wrote IR: {}", args.output.display());
     println!("wrote metadata: {}", metadata_path.display());
+    println!("wrote channel map: {}", channel_map_path.display());
     Ok(())
 }
 
@@ -211,19 +230,20 @@ fn channel_format_from_arg(arg: ChannelFormatArg) -> ChannelFormat {
         ChannelFormatArg::Surround7_1 => ChannelFormat::Surround7_1,
         ChannelFormatArg::Atmos7_1_4 => ChannelFormat::Atmos7_1_4,
         ChannelFormatArg::Atmos7_2_4 => ChannelFormat::Atmos7_2_4,
+        ChannelFormatArg::Custom => ChannelFormat::Custom,
     }
 }
 
-fn print_generation_metrics(r: &AnalysisReport, channel_format: ChannelFormat) {
+fn print_generation_metrics(r: &AnalysisReport, channel_format: &str, channel_labels: &[String]) {
     println!("{}", util::console::section("--- generated IR metrics ---"));
     println!("{}", util::console::metric("sample_rate_hz", r.sample_rate));
     println!(
         "{}",
-        util::console::metric("channel_format", channel_format.layout_name())
+        util::console::metric("channel_format", channel_format)
     );
     println!(
         "{}",
-        util::console::metric("channel_labels", channel_format.channel_labels().join(","))
+        util::console::metric("channel_labels", channel_labels.join(","))
     );
     println!("{}", util::console::metric("channels", r.channels));
     println!(
@@ -290,6 +310,66 @@ fn print_generation_metrics(r: &AnalysisReport, channel_format: ChannelFormat) {
     println!(
         "{}",
         util::console::metric("late_energy_ratio", format!("{:.5}", r.late_energy_ratio))
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "inter_channel_corr_mean_abs",
+            match r.inter_channel_correlation_mean_abs {
+                Some(v) => format!("{v:.5}"),
+                None => "n/a".to_string(),
+            }
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "inter_channel_corr_min_abs",
+            match r.inter_channel_correlation_min_abs {
+                Some(v) => format!("{v:.5}"),
+                None => "n/a".to_string(),
+            }
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "front_energy_ratio",
+            match r.front_energy_ratio {
+                Some(v) => format!("{v:.5}"),
+                None => "n/a".to_string(),
+            }
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "rear_energy_ratio",
+            match r.rear_energy_ratio {
+                Some(v) => format!("{v:.5}"),
+                None => "n/a".to_string(),
+            }
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "height_energy_ratio",
+            match r.height_energy_ratio {
+                Some(v) => format!("{v:.5}"),
+                None => "n/a".to_string(),
+            }
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "lfe_energy_ratio",
+            match r.lfe_energy_ratio {
+                Some(v) => format!("{v:.5}"),
+                None => "n/a".to_string(),
+            }
+        )
     );
     println!(
         "{}",

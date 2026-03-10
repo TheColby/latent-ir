@@ -1,6 +1,8 @@
 use rustfft::{num_complex::Complex32, FftPlanner};
 use serde::{Deserialize, Serialize};
 
+use crate::core::spatial::{self, ChannelMap};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalysisReport {
     pub schema_version: String,
@@ -21,6 +23,13 @@ pub struct AnalysisReport {
     pub early_energy_ratio: f32,
     pub late_energy_ratio: f32,
     pub stereo_correlation: Option<f32>,
+    pub inter_channel_correlation_matrix: Option<Vec<Vec<f32>>>,
+    pub inter_channel_correlation_mean_abs: Option<f32>,
+    pub inter_channel_correlation_min_abs: Option<f32>,
+    pub front_energy_ratio: Option<f32>,
+    pub rear_energy_ratio: Option<f32>,
+    pub height_energy_ratio: Option<f32>,
+    pub lfe_energy_ratio: Option<f32>,
     pub warnings: Vec<String>,
 }
 
@@ -29,6 +38,15 @@ pub struct IrAnalyzer;
 
 impl IrAnalyzer {
     pub fn analyze(&self, channels: &[Vec<f32>], sample_rate: u32) -> AnalysisReport {
+        self.analyze_with_channel_map(channels, sample_rate, None)
+    }
+
+    pub fn analyze_with_channel_map(
+        &self,
+        channels: &[Vec<f32>],
+        sample_rate: u32,
+        channel_map: Option<&ChannelMap>,
+    ) -> AnalysisReport {
         let mut warnings = Vec::new();
         let c = channels.len().max(1);
         let n = channels.first().map(|x| x.len()).unwrap_or(0);
@@ -48,12 +66,6 @@ impl IrAnalyzer {
         if t60.is_none() {
             warnings.push("T60 estimate unavailable due to insufficient decay range".to_string());
         }
-        if c > 2 {
-            warnings.push(
-                "stereo_correlation reports channel 0/1 pair only for multichannel material"
-                    .to_string(),
-            );
-        }
 
         let spectral_centroid_hz = estimate_centroid(&mono, sample_rate);
         let (low, mid, high) = estimate_band_decays(&mono, sample_rate);
@@ -63,6 +75,36 @@ impl IrAnalyzer {
         } else {
             None
         };
+
+        let (corr_matrix, corr_mean_abs, corr_min_abs) = inter_channel_correlation(channels);
+
+        let (front_energy_ratio, rear_energy_ratio, height_energy_ratio, lfe_energy_ratio) =
+            if let Some(map) = channel_map {
+                match spatial::validate_channel_map(map, c)
+                    .and_then(|_| directional_energy_ratios(channels, map))
+                {
+                    Ok(v) => v,
+                    Err(err) => {
+                        warnings.push(format!("directional energy metrics unavailable: {err}"));
+                        (None, None, None, None)
+                    }
+                }
+            } else {
+                if c > 2 {
+                    warnings.push(
+                        "directional energy metrics unavailable: no channel map provided"
+                            .to_string(),
+                    );
+                }
+                (None, None, None, None)
+            };
+
+        if c > 2 {
+            warnings.push(
+                "stereo_correlation reports channel 0/1 pair only for multichannel material"
+                    .to_string(),
+            );
+        }
 
         AnalysisReport {
             schema_version: "latent-ir.analysis.v1".to_string(),
@@ -83,9 +125,98 @@ impl IrAnalyzer {
             early_energy_ratio: early_ratio,
             late_energy_ratio: late_ratio,
             stereo_correlation: stereo_corr,
+            inter_channel_correlation_matrix: corr_matrix,
+            inter_channel_correlation_mean_abs: corr_mean_abs,
+            inter_channel_correlation_min_abs: corr_min_abs,
+            front_energy_ratio,
+            rear_energy_ratio,
+            height_energy_ratio,
+            lfe_energy_ratio,
             warnings,
         }
     }
+}
+
+fn directional_energy_ratios(
+    channels: &[Vec<f32>],
+    map: &ChannelMap,
+) -> anyhow::Result<(Option<f32>, Option<f32>, Option<f32>, Option<f32>)> {
+    if channels.is_empty() || map.channels.is_empty() {
+        return Ok((None, None, None, None));
+    }
+
+    let mut front = 0.0f32;
+    let mut rear = 0.0f32;
+    let mut height = 0.0f32;
+    let mut lfe = 0.0f32;
+    let mut total = 0.0f32;
+
+    for entry in &map.channels {
+        let ch = channels
+            .get(entry.index)
+            .ok_or_else(|| anyhow::anyhow!("channel map index out of bounds: {}", entry.index))?;
+        let e = ch.iter().map(|x| x * x).sum::<f32>();
+        total += e;
+
+        if entry.is_lfe {
+            lfe += e;
+        } else if entry.elevation_deg.abs() >= 20 {
+            height += e;
+        } else if entry.azimuth_deg.abs() <= 45 {
+            front += e;
+        } else {
+            rear += e;
+        }
+    }
+
+    if total <= 1e-12 {
+        return Ok((None, None, None, None));
+    }
+
+    Ok((
+        Some(front / total),
+        Some(rear / total),
+        Some(height / total),
+        Some(lfe / total),
+    ))
+}
+
+fn inter_channel_correlation(
+    channels: &[Vec<f32>],
+) -> (Option<Vec<Vec<f32>>>, Option<f32>, Option<f32>) {
+    let c = channels.len();
+    if c < 2 {
+        return (None, None, None);
+    }
+
+    let mut matrix = vec![vec![0.0f32; c]; c];
+    let mut off_diag_abs = Vec::new();
+
+    for i in 0..c {
+        for j in i..c {
+            let corr = if i == j {
+                1.0
+            } else {
+                correlation(&channels[i], &channels[j])
+            };
+            matrix[i][j] = corr;
+            matrix[j][i] = corr;
+            if i != j {
+                off_diag_abs.push(corr.abs());
+            }
+        }
+    }
+
+    if off_diag_abs.is_empty() {
+        return (Some(matrix), None, None);
+    }
+
+    let mean = off_diag_abs.iter().sum::<f32>() / off_diag_abs.len() as f32;
+    let min = off_diag_abs
+        .iter()
+        .fold(f32::INFINITY, |m, &v| if v < m { v } else { m });
+
+    (Some(matrix), Some(mean), Some(min))
 }
 
 fn downmix(channels: &[Vec<f32>]) -> Vec<f32> {
@@ -270,6 +401,6 @@ fn correlation(a: &[f32], b: &[f32]) -> f32 {
     if da <= 1e-12 || db <= 1e-12 {
         0.0
     } else {
-        (num / (da.sqrt() * db.sqrt())).clamp(-1.0, 1.0)
+        num / (da.sqrt() * db.sqrt())
     }
 }

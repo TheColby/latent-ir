@@ -1,0 +1,23 @@
+{
+  "schema_version": "latent-ir.layout.v1",
+  "layout_name": "custom_16_0_ring",
+  "spatial_encoding": "discrete",
+  "channels": [
+    {"label": "C00", "azimuth_deg": 0, "elevation_deg": 0},
+    {"label": "C01", "azimuth_deg": 23, "elevation_deg": 0},
+    {"label": "C02", "azimuth_deg": 45, "elevation_deg": 0},
+    {"label": "C03", "azimuth_deg": 68, "elevation_deg": 0},
+    {"label": "C04", "azimuth_deg": 90, "elevation_deg": 0},
+    {"label": "C05", "azimuth_deg": 113, "elevation_deg": 0},
+    {"label": "C06", "azimuth_deg": 135, "elevation_deg": 0},
+    {"label": "C07", "azimuth_deg": 158, "elevation_deg": 0},
+    {"label": "C08", "azimuth_deg": 180, "elevation_deg": 0},
+    {"label": "C09", "azimuth_deg": -158, "elevation_deg": 0},
+    {"label": "C10", "azimuth_deg": -135, "elevation_deg": 0},
+    {"label": "C11", "azimuth_deg": -113, "elevation_deg": 0},
+    {"label": "C12", "azimuth_deg": -90, "elevation_deg": 0},
+    {"label": "C13", "azimuth_deg": -68, "elevation_deg": 0},
+    {"label": "C14", "azimuth_deg": -45, "elevation_deg": 0},
+    {"label": "C15", "azimuth_deg": -23, "elevation_deg": 0}
+  ]
+}

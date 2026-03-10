@@ -18,7 +18,7 @@ Canonical acoustic state is represented by `DescriptorSet` with grouped domains:
 - Time: duration, predelay, T60, EDT, attack gap
 - Spectral: brightness, HF damping, LF bloom, spectral tilt, low/mid/high decay multipliers
 - Structural: early/late density, diffusion, modal density, tail noise, grain
-- Spatial: channel format, width, decorrelation, asymmetry
+- Spatial: channel format, width, decorrelation, asymmetry, optional custom channel geometry
 
 Generation pipeline resolves descriptor values from:
 
@@ -35,7 +35,7 @@ The procedural generator synthesizes IRs as layered components:
 2. sparse early reflection field with density and spatial spread
 3. dense late stochastic tail
 4. frequency-weighted envelope shaping via band-dependent decay constants
-5. layout projection: discrete speaker layouts (`mono`, `stereo`, `5.1`, `7.1`, `7.1.4`, `7.2.4`) or FOA ambiX (`WXYZ`)
+5. layout projection: discrete speaker layouts (`mono`, `stereo`, `5.1`, `7.1`, `7.1.4`, `7.2.4`, `custom`) or FOA ambiX (`WXYZ`)
 6. decorrelation jitter and width shaping
 7. output normalization and sanity bounds
 
@@ -71,6 +71,8 @@ v0 analysis targets robust engineering estimates suitable for CLI workflows:
 - spectral centroid summary
 - coarse low/mid/high decay splits
 - stereo pair correlation (channel 0/1 for multichannel material)
+- inter-channel correlation matrix + mean/min absolute summaries
+- directional energy balance (front/rear/height/LFE) when channel map is available
 - early-vs-late energy ratio
 
 Metrics are intentionally labeled as approximations where standards-grade compliance is not yet implemented.
@@ -85,4 +87,4 @@ Every generation run should be reproducible from:
 - command context
 - project version
 
-`generate` writes companion JSON metadata with analysis report and warnings. This makes batch runs scriptable and traceable for both research and product workflows.
+`generate` writes companion JSON metadata with analysis report and warnings, plus a validated channel-map sidecar (`*.channels.json`) that captures channel order and geometry. This makes batch runs scriptable and traceable for both research and product workflows.

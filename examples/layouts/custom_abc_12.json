@@ -1,0 +1,19 @@
+{
+  "schema_version": "latent-ir.layout.v1",
+  "layout_name": "custom_a_b_c_12",
+  "spatial_encoding": "discrete",
+  "channels": [
+    {"label": "A1", "azimuth_deg": 30, "elevation_deg": 0},
+    {"label": "A2", "azimuth_deg": -30, "elevation_deg": 0},
+    {"label": "A3", "azimuth_deg": 0, "elevation_deg": 0},
+    {"label": "A4", "azimuth_deg": 180, "elevation_deg": 0},
+    {"label": "B1", "azimuth_deg": 90, "elevation_deg": 0},
+    {"label": "B2", "azimuth_deg": -90, "elevation_deg": 0},
+    {"label": "B3", "azimuth_deg": 150, "elevation_deg": 0},
+    {"label": "B4", "azimuth_deg": -150, "elevation_deg": 0},
+    {"label": "C1", "azimuth_deg": 35, "elevation_deg": 45},
+    {"label": "C2", "azimuth_deg": -35, "elevation_deg": 45},
+    {"label": "C3", "azimuth_deg": 145, "elevation_deg": 45},
+    {"label": "C4", "azimuth_deg": -145, "elevation_deg": 45}
+  ]
+}

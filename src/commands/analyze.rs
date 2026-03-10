@@ -2,13 +2,24 @@ use anyhow::{Context, Result};
 
 use crate::cli::AnalyzeArgs;
 use crate::core::analysis::IrAnalyzer;
+use crate::core::spatial;
 use crate::core::util;
 
 pub fn run(args: AnalyzeArgs) -> Result<()> {
     let wav = util::audio::read_wav_f32(&args.input)
         .with_context(|| format!("failed to read {}", args.input.display()))?;
 
-    let report = IrAnalyzer::default().analyze(&wav.channels, wav.sample_rate);
+    let channel_map = if let Some(path) = args.channel_map.as_deref() {
+        Some(spatial::read_channel_map(path)?)
+    } else {
+        spatial::try_read_companion_channel_map(&args.input)?
+    };
+
+    let report = IrAnalyzer::default().analyze_with_channel_map(
+        &wav.channels,
+        wav.sample_rate,
+        channel_map.as_ref(),
+    );
 
     if args.json {
         if let Some(path) = args.output {
@@ -25,6 +36,23 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
             "{}",
             util::console::metric("sample_rate", report.sample_rate)
         );
+        if let Some(map) = channel_map.as_ref() {
+            println!(
+                "{}",
+                util::console::metric("channel_format", &map.layout_name)
+            );
+            println!(
+                "{}",
+                util::console::metric("spatial_encoding", &map.spatial_encoding)
+            );
+            let labels = map
+                .channels
+                .iter()
+                .map(|c| c.label.as_str())
+                .collect::<Vec<_>>()
+                .join(",");
+            println!("{}", util::console::metric("channel_labels", labels));
+        }
         println!(
             "{}",
             util::console::metric("duration_s", format!("{:.3}", report.duration_s))
@@ -74,6 +102,66 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
             util::console::metric(
                 "spectral_centroid_hz",
                 format!("{:.1}", report.spectral_centroid_hz)
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "inter_channel_corr_mean_abs",
+                report
+                    .inter_channel_correlation_mean_abs
+                    .map(|v| format!("{v:.4}"))
+                    .unwrap_or_else(|| "n/a".to_string())
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "inter_channel_corr_min_abs",
+                report
+                    .inter_channel_correlation_min_abs
+                    .map(|v| format!("{v:.4}"))
+                    .unwrap_or_else(|| "n/a".to_string())
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "front_energy_ratio",
+                report
+                    .front_energy_ratio
+                    .map(|v| format!("{v:.4}"))
+                    .unwrap_or_else(|| "n/a".to_string())
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "rear_energy_ratio",
+                report
+                    .rear_energy_ratio
+                    .map(|v| format!("{v:.4}"))
+                    .unwrap_or_else(|| "n/a".to_string())
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "height_energy_ratio",
+                report
+                    .height_energy_ratio
+                    .map(|v| format!("{v:.4}"))
+                    .unwrap_or_else(|| "n/a".to_string())
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "lfe_energy_ratio",
+                report
+                    .lfe_energy_ratio
+                    .map(|v| format!("{v:.4}"))
+                    .unwrap_or_else(|| "n/a".to_string())
             )
         );
     }

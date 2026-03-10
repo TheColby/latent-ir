@@ -139,7 +139,15 @@ pub struct GenerateArgs {
     #[arg(long)]
     pub macro_trajectory: Option<PathBuf>,
 
-    /// Output channel format (`mono`, `stereo`, `foa`, `5.1`, `7.1`, `7.1.4`, `7.2.4`).
+    /// Custom channel layout JSON path (required with `--channels custom`).
+    #[arg(long)]
+    pub layout_json: Option<PathBuf>,
+
+    /// Optional channel-map JSON output path (defaults to companion `.channels.json`).
+    #[arg(long)]
+    pub channel_map_out: Option<PathBuf>,
+
+    /// Output channel format (`mono`, `stereo`, `foa`, `5.1`, `7.1`, `7.1.4`, `7.2.4`, `custom`).
     #[arg(long, value_enum, default_value_t = ChannelFormatArg::Stereo)]
     pub channels: ChannelFormatArg,
 }
@@ -156,6 +164,10 @@ pub struct AnalyzeArgs {
     /// Optional JSON output path.
     #[arg(long)]
     pub output: Option<PathBuf>,
+
+    /// Optional channel-map JSON path; defaults to companion `.channels.json` when present.
+    #[arg(long)]
+    pub channel_map: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -449,7 +461,10 @@ pub struct AbTestArgs {
     pub macro_clarity: Option<f32>,
     #[arg(long)]
     pub macro_trajectory: Option<PathBuf>,
-    /// Output channel format (`mono`, `stereo`, `foa`, `5.1`, `7.1`, `7.1.4`, `7.2.4`).
+    /// Custom channel layout JSON path (required with `--channels custom`).
+    #[arg(long)]
+    pub layout_json: Option<PathBuf>,
+    /// Output channel format (`mono`, `stereo`, `foa`, `5.1`, `7.1`, `7.1.4`, `7.2.4`, `custom`).
     #[arg(long, value_enum, default_value_t = ChannelFormatArg::Stereo)]
     pub channels: ChannelFormatArg,
     /// Write a markdown scorecard (`ab_test_report.md`) in output directory.
@@ -488,6 +503,8 @@ pub enum ChannelFormatArg {
     Atmos7_1_4,
     #[value(name = "7.2.4", alias = "atmos-7.2.4", alias = "7_2_4")]
     Atmos7_2_4,
+    #[value(name = "custom", alias = "layout-json")]
+    Custom,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]

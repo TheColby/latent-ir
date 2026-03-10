@@ -208,6 +208,8 @@ fn build_generate_args(
         macro_material: args.macro_material,
         macro_clarity: args.macro_clarity,
         macro_trajectory: args.macro_trajectory.clone(),
+        layout_json: args.layout_json.clone(),
+        channel_map_out: None,
         channels: args.channels,
     }
 }

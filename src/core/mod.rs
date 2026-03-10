@@ -10,5 +10,6 @@ pub mod perceptual;
 pub mod presets;
 pub mod render;
 pub mod semantics;
+pub mod spatial;
 pub mod training;
 pub mod util;

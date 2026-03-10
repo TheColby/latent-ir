@@ -31,6 +31,10 @@
 - Descriptor constraint projection and confidence tracking
 - Morphing upgrades (envelope-aware + descriptor-space coupling)
 - Model manifest schema + runtime compatibility validation (`model validate`)
+- Custom channel-layout ingestion (`--channels custom --layout-json ...`)
+- Validated channel-map sidecar emission/ingestion (`*.channels.json`)
+- Upgraded FFT partitioned convolution core (FDL overlap-save style)
+- Multichannel analysis metrics (correlation matrix + directional energy balances)
 
 Remaining for v0.3:
 
@@ -50,4 +54,4 @@ Remaining for v0.3:
 
 1. Latent-ready conditioning contracts (`LatentVector` + projection interfaces)
 2. Benchmark/eval baseline suites in CI for mandatory regression gates
-3. Partitioned convolution streaming mode for long-form offline rendering
+3. Layout-aware render/analyze benchmark corpus for large custom arrays

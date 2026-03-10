@@ -20,8 +20,10 @@ Most reverbs expose fixed presets or static measured spaces. `latent-ir` treats 
 ## Feature Overview (current scaffold)
 
 - Descriptor-conditioned IR generation (`generate`)
-- Spatial layout generation for `mono`, `stereo`, `foa` (ambiX), `5.1`, `7.1`, `7.1.4`, `7.2.4`
+- Spatial layout generation for `mono`, `stereo`, `foa` (ambiX), `5.1`, `7.1`, `7.1.4`, `7.2.4`, and `custom` layout JSON
+- Validated channel-map sidecars (`.channels.json`) for reproducible spatial routing
 - Engineering-focused IR analysis (`analyze`)
+- Multichannel analysis metrics (inter-channel correlation matrix + directional/LFE energy balance)
 - IR morphing between two spaces (`morph`)
 - Offline convolution rendering (`render`)
 - Descriptor sampling utilities (`sample`)
@@ -56,6 +58,7 @@ Core modules:
 - `src/core/presets`: named descriptor defaults
 - `src/core/generator`: procedural IR synthesis engine
 - `src/core/analysis`: first-pass acoustics metrics
+- `src/core/spatial`: custom layout parsing, validation, and channel-map sidecars
 - `src/core/morph`: IR and descriptor interpolation
 - `src/core/render`: offline convolution rendering
 
@@ -65,11 +68,12 @@ This is an initial but functional scaffold with real behavior in core commands.
 
 Implemented now:
 
-- procedural IR generation for mono/stereo + multichannel layouts (`foa`, `5.1`, `7.1`, `7.1.4`, `7.2.4`) with direct impulse, early reflections, dense stochastic tail, simple band-dependent decay shaping, deterministic seed
+- procedural IR generation for mono/stereo + multichannel layouts (`foa`, `5.1`, `7.1`, `7.1.4`, `7.2.4`, `custom`) with direct impulse, early reflections, dense stochastic tail, simple band-dependent decay shaping, deterministic seed
+- validated spatial channel-map JSON sidecars written on generation and auto-consumed by analysis when present
 - approximate T20/T30/T60/EDT/predelay/EDC-centric analysis
 - spectral centroid and low/mid/high decay estimates
-- stereo pair correlation (channel 0/1) + early/late energy summaries
-- offline WAV convolution with wet/dry control
+- stereo pair correlation (channel 0/1), inter-channel correlation matrix, and directional energy summaries (front/rear/height/LFE with channel map)
+- offline WAV convolution with wet/dry control and optimized FFT partitioned engine for high channel counts
 
 Not implemented yet:
 
@@ -187,6 +191,75 @@ cargo run -- generate --prompt "dark concrete transit terminal" --channels 5.1 -
 cargo run -- generate --prompt "dark concrete transit terminal" --channels 7.1.4 --output out/terminal_714.wav
 ```
 
+Generate custom 16.0 from layout JSON:
+
+```bash
+cargo run -- generate \
+  --prompt "circular concrete tank with long smooth tail" \
+  --channels custom \
+  --layout-json examples/layouts/custom_16_0_ring.json \
+  --output out/tank_16_0.wav
+```
+
+Generate a 16-channel IR on a 10 m circular array (capture at origin), using prompt `"32-second dark cave"` at `384000` Hz:
+
+```bash
+cargo run -- generate \
+  --prompt "32-second dark cave" \
+  --duration 32 \
+  --sample-rate 384000 \
+  --channels custom \
+  --layout-json examples/layouts/custom_16_0_circle_10m_origin.json \
+  --output out/dark_cave_16ch_384k.wav
+```
+
+Corresponding array-geometry JSON file:
+
+```json
+{
+  "schema_version": "latent-ir.layout.v1",
+  "layout_name": "custom_16_0_circle_10m_origin",
+  "spatial_encoding": "discrete",
+  "array_geometry": {
+    "shape": "circle",
+    "radius_m": 10.0,
+    "center_m": { "x": 0.0, "y": 0.0, "z": 0.0 },
+    "capture_position_m": { "x": 0.0, "y": 0.0, "z": 0.0 },
+    "notes": "16 channels equally distributed around a 10 m radius circle; IR capture at origin"
+  },
+  "channels": [
+    { "label": "C00", "azimuth_deg": 0, "elevation_deg": 0, "position_m": { "x": 10.0000, "y": 0.0000, "z": 0.0 } },
+    { "label": "C01", "azimuth_deg": 23, "elevation_deg": 0, "position_m": { "x": 9.2388, "y": 3.8268, "z": 0.0 } },
+    { "label": "C02", "azimuth_deg": 45, "elevation_deg": 0, "position_m": { "x": 7.0711, "y": 7.0711, "z": 0.0 } },
+    { "label": "C03", "azimuth_deg": 68, "elevation_deg": 0, "position_m": { "x": 3.8268, "y": 9.2388, "z": 0.0 } },
+    { "label": "C04", "azimuth_deg": 90, "elevation_deg": 0, "position_m": { "x": 0.0000, "y": 10.0000, "z": 0.0 } },
+    { "label": "C05", "azimuth_deg": 113, "elevation_deg": 0, "position_m": { "x": -3.8268, "y": 9.2388, "z": 0.0 } },
+    { "label": "C06", "azimuth_deg": 135, "elevation_deg": 0, "position_m": { "x": -7.0711, "y": 7.0711, "z": 0.0 } },
+    { "label": "C07", "azimuth_deg": 158, "elevation_deg": 0, "position_m": { "x": -9.2388, "y": 3.8268, "z": 0.0 } },
+    { "label": "C08", "azimuth_deg": 180, "elevation_deg": 0, "position_m": { "x": -10.0000, "y": 0.0000, "z": 0.0 } },
+    { "label": "C09", "azimuth_deg": -158, "elevation_deg": 0, "position_m": { "x": -9.2388, "y": -3.8268, "z": 0.0 } },
+    { "label": "C10", "azimuth_deg": -135, "elevation_deg": 0, "position_m": { "x": -7.0711, "y": -7.0711, "z": 0.0 } },
+    { "label": "C11", "azimuth_deg": -113, "elevation_deg": 0, "position_m": { "x": -3.8268, "y": -9.2388, "z": 0.0 } },
+    { "label": "C12", "azimuth_deg": -90, "elevation_deg": 0, "position_m": { "x": 0.0000, "y": -10.0000, "z": 0.0 } },
+    { "label": "C13", "azimuth_deg": -68, "elevation_deg": 0, "position_m": { "x": 3.8268, "y": -9.2388, "z": 0.0 } },
+    { "label": "C14", "azimuth_deg": -45, "elevation_deg": 0, "position_m": { "x": 7.0711, "y": -7.0711, "z": 0.0 } },
+    { "label": "C15", "azimuth_deg": -23, "elevation_deg": 0, "position_m": { "x": 9.2388, "y": -3.8268, "z": 0.0 } }
+  ]
+}
+```
+
+The generator currently uses `azimuth_deg`/`elevation_deg` (polar) for synthesis. `position_m` is included for explicit geometry documentation/interchange.
+
+Generate A.B.C-style custom layout from layout JSON:
+
+```bash
+cargo run -- generate \
+  --prompt "multi-zone reflective chamber" \
+  --channels custom \
+  --layout-json examples/layouts/custom_abc_12.json \
+  --output out/chamber_abc.wav
+```
+
 Analyze IR with JSON output:
 
 ```bash
@@ -261,23 +334,24 @@ cargo run -- render \
 ```
 
 Spatial metadata fields (`channel_format`, `spatial_encoding`, `channel_labels`) are emitted in generation JSON for downstream DAW/tooling workflows.
+Each generated IR also writes a validated companion channel-map sidecar (`*.channels.json`) unless `--channel-map-out` is set.
 
 ## Command Reference
 
 - `generate`
-  - Inputs: optional `--prompt`, optional `--preset`, optional learned encoders (`--text-encoder-model`, `--audio-encoder-model`, `--text-encoder-onnx`, `--audio-encoder-onnx`, `--reference-audio`), descriptor overrides (`--duration`, `--t60`, `--predelay-ms`, `--edt`, etc.), channel format (`mono`, `stereo`, `foa`, `5.1`, `7.1`, `7.1.4`, `7.2.4`), seed
+  - Inputs: optional `--prompt`, optional `--preset`, optional learned encoders (`--text-encoder-model`, `--audio-encoder-model`, `--text-encoder-onnx`, `--audio-encoder-onnx`, `--reference-audio`), descriptor overrides (`--duration`, `--t60`, `--predelay-ms`, `--edt`, etc.), channel format (`mono`, `stereo`, `foa`, `5.1`, `7.1`, `7.1.4`, `7.2.4`, `custom`), optional `--layout-json` for custom layouts, seed
   - Perceptual controls: `--macro-size`, `--macro-distance`, `--macro-material`, `--macro-clarity`, `--macro-trajectory`
-  - Outputs: generated IR WAV + companion JSON metadata (or custom `--metadata-out`), optional analysis JSON via `--json-analysis-out`
+  - Outputs: generated IR WAV + companion JSON metadata (or custom `--metadata-out`), validated channel-map JSON sidecar (or custom `--channel-map-out`), optional analysis JSON via `--json-analysis-out`
   - Console: prints detailed IR/reverb metrics for every generation run (layout, labels, length, EDT/T20/T30/T60, predelay, spectral, energy split, stereo pair correlation)
 - `analyze`
-  - Inputs: IR WAV
+  - Inputs: IR WAV, optional explicit channel map via `--channel-map` (otherwise companion sidecar is auto-detected)
   - Outputs: console metrics or JSON analysis report
 - `morph`
   - Inputs: two IR WAVs + `--alpha`
   - Outputs: morphed IR WAV
 - `render`
   - Inputs: dry WAV + `--ir` + `--mix`
-  - Optional performance controls: `--engine auto|direct|fft-partitioned`, `--partition-size`
+  - Optional performance controls: `--engine auto|direct|fft-partitioned`, `--partition-size` (FFT engine is optimized for multichannel/high-order layouts)
   - Outputs: rendered WAV
 - `sample`
   - Inputs: count + seed
@@ -384,6 +458,7 @@ cargo run -- ab-test \
 - Acoustic metrics are engineering estimates for development and comparison, not certified room-acoustics measurements.
 - IR generation is synthetic and intentionally practical; it does not claim full physical room simulation.
 - Spatial outputs are layout-projected synthetic IRs; current support is not an object-based Atmos renderer or standards-certified ambisonic room simulation.
+- Custom layouts are only as meaningful as their provided channel geometry; always define explicit azimuth/elevation/LFE semantics.
 
 ## JSON Schema Stability (v0)
 

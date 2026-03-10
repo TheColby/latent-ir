@@ -2,7 +2,7 @@ use anyhow::Result;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
-use crate::core::descriptors::{ChannelFormat, ChannelSpec, DescriptorSet};
+use crate::core::descriptors::{ChannelSpec, DescriptorSet, SpatialEncoding};
 use crate::core::perceptual::MacroTrajectory;
 
 #[derive(Debug, Clone)]
@@ -106,21 +106,27 @@ fn project_channels(
     seed: u64,
     sample_rate: u32,
 ) -> Vec<Vec<f32>> {
-    match descriptors.spatial.channel_format {
-        ChannelFormat::Mono => vec![mono.to_vec()],
-        ChannelFormat::FoaAmbix => project_foa_ambix(mono, descriptors, seed, sample_rate),
-        layout => project_discrete_layout(mono, descriptors, layout, seed, sample_rate),
+    let specs = descriptors.spatial.resolved_channel_specs();
+    if specs.is_empty() {
+        return vec![mono.to_vec()];
+    }
+
+    if descriptors.spatial.resolved_spatial_encoding() == SpatialEncoding::AmbisonicFoaAmbix
+        && specs.len() == 4
+    {
+        project_foa_ambix(mono, descriptors, seed, sample_rate)
+    } else {
+        project_discrete_layout(mono, descriptors, &specs, seed, sample_rate)
     }
 }
 
 fn project_discrete_layout(
     mono: &[f32],
     descriptors: &DescriptorSet,
-    layout: ChannelFormat,
+    specs: &[ChannelSpec],
     seed: u64,
     sample_rate: u32,
 ) -> Vec<Vec<f32>> {
-    let specs = layout.channel_specs();
     let n = mono.len();
     let sr = sample_rate as f32;
     let low = lowpass_onepole(mono, 0.015);
@@ -136,7 +142,7 @@ fn project_discrete_layout(
     let t60 = descriptors.time.t60.max(0.1);
 
     for (ch_idx, spec) in specs.iter().enumerate() {
-        let dir = channel_direction(*spec);
+        let dir = channel_direction(spec);
         let alignment = dot3(src, dir).clamp(-1.0, 1.0);
         let front_focus = dir[1].max(0.0);
         let spread_gain =
@@ -239,7 +245,7 @@ fn source_direction(asymmetry: f32, diffusion: f32) -> [f32; 3] {
     v
 }
 
-fn channel_direction(spec: ChannelSpec) -> [f32; 3] {
+fn channel_direction(spec: &ChannelSpec) -> [f32; 3] {
     let az = (spec.azimuth_deg as f32).to_radians();
     let el = (spec.elevation_deg as f32).to_radians();
 

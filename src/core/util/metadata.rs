@@ -22,6 +22,7 @@ pub struct GenerationMetadata {
     pub spatial_encoding: String,
     pub channel_format: String,
     pub channel_labels: Vec<String>,
+    pub channel_map_path: Option<String>,
     pub descriptor: DescriptorSet,
     pub warnings: Vec<String>,
     pub generated_at_utc: DateTime<Utc>,
