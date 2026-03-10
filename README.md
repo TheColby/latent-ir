@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/latent-ir-logo.png" alt="latent-ir logo" />
+  <img src="docs/assets/latent-ir-logo.svg" alt="latent-ir logo" width="760" />
 </p>
 
 # latent-ir

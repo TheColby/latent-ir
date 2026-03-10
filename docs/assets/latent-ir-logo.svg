@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 350" role="img" aria-labelledby="title desc">
+  <title id="title">latent-ir logo</title>
+  <desc id="desc">White latent-ir wordmark with circular mark on a dark background.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#16181f"/>
+      <stop offset="1" stop-color="#0f1116"/>
+    </linearGradient>
+    <style>
+      .fg { fill: #f2f2f2; }
+      .txt { fill: #f2f2f2; font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size: 122px; font-weight: 500; letter-spacing: 1px; }
+      .stroke { fill: none; stroke: #f2f2f2; stroke-linecap: round; stroke-width: 12; }
+    </style>
+  </defs>
+
+  <rect width="1400" height="350" fill="url(#bg)"/>
+
+  <g transform="translate(38,24)">
+    <circle class="fg" cx="120" cy="151" r="95"/>
+    <circle fill="url(#bg)" cx="68" cy="151" r="53"/>
+    <path class="stroke" d="M90 143 C106 150,106 178,90 185"/>
+    <path class="stroke" d="M78 131 C103 143,103 194,78 206"/>
+    <path class="stroke" d="M66 119 C101 137,101 200,66 218"/>
+  </g>
+
+  <text class="txt" x="310" y="216">latent-ir</text>
+</svg>
