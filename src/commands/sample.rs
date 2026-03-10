@@ -4,6 +4,7 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::cli::SampleArgs;
 use crate::core::descriptors::DescriptorSet;
+use crate::core::util;
 
 pub fn run(args: SampleArgs) -> Result<()> {
     let mut rng = ChaCha8Rng::seed_from_u64(args.seed);
@@ -28,9 +29,18 @@ pub fn run(args: SampleArgs) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&out)?);
     } else {
         for (i, d) in out.iter().enumerate() {
+            println!("{}", util::console::section(&format!("sample[{i}]")));
             println!(
-                "sample[{i}]: t60={:.2}s predelay={:.1}ms diffusion={:.2}",
-                d.time.t60, d.time.predelay_ms, d.structural.diffusion
+                "{}",
+                util::console::metric("t60_s", format!("{:.2}", d.time.t60))
+            );
+            println!(
+                "{}",
+                util::console::metric("predelay_ms", format!("{:.1}", d.time.predelay_ms))
+            );
+            println!(
+                "{}",
+                util::console::metric("diffusion", format!("{:.2}", d.structural.diffusion))
             );
         }
     }

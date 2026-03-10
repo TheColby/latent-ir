@@ -17,17 +17,65 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
             println!("{}", serde_json::to_string_pretty(&report)?);
         }
     } else {
-        println!("file: {}", args.input.display());
-        println!("sample_rate: {}", report.sample_rate);
-        println!("duration_s: {:.3}", report.duration_s);
-        println!("peak: {:.4}", report.peak);
-        println!("rms: {:.4}", report.rms);
-        println!("predelay_ms_est: {:.2}", report.predelay_ms_est);
-        println!("edt_s_est: {:.3}", report.edt_s_est.unwrap_or(-1.0));
-        println!("t20_s_est: {:.3}", report.t20_s_est.unwrap_or(-1.0));
-        println!("t30_s_est: {:.3}", report.t30_s_est.unwrap_or(-1.0));
-        println!("t60_s_est: {:.3}", report.t60_s_est.unwrap_or(-1.0));
-        println!("spectral_centroid_hz: {:.1}", report.spectral_centroid_hz);
+        println!(
+            "{}",
+            util::console::info("file", args.input.display().to_string())
+        );
+        println!(
+            "{}",
+            util::console::metric("sample_rate", report.sample_rate)
+        );
+        println!(
+            "{}",
+            util::console::metric("duration_s", format!("{:.3}", report.duration_s))
+        );
+        println!(
+            "{}",
+            util::console::metric("peak", format!("{:.4}", report.peak))
+        );
+        println!(
+            "{}",
+            util::console::metric("rms", format!("{:.4}", report.rms))
+        );
+        println!(
+            "{}",
+            util::console::metric("predelay_ms_est", format!("{:.2}", report.predelay_ms_est))
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "edt_s_est",
+                format!("{:.3}", report.edt_s_est.unwrap_or(-1.0))
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "t20_s_est",
+                format!("{:.3}", report.t20_s_est.unwrap_or(-1.0))
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "t30_s_est",
+                format!("{:.3}", report.t30_s_est.unwrap_or(-1.0))
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "t60_s_est",
+                format!("{:.3}", report.t60_s_est.unwrap_or(-1.0))
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "spectral_centroid_hz",
+                format!("{:.1}", report.spectral_centroid_hz)
+            )
+        );
     }
 
     Ok(())

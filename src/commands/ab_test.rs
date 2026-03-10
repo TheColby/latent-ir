@@ -4,8 +4,9 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
-use crate::cli::{AbTestArgs, ChannelFormatArg, GenerateArgs};
+use crate::cli::{AbTestArgs, GenerateArgs};
 use crate::core::analysis::AnalysisReport;
+use crate::core::util;
 
 use super::generate;
 
@@ -111,13 +112,28 @@ pub fn run(args: AbTestArgs) -> Result<()> {
         let md = render_markdown_scorecard(&report);
         let md_path = args.output_dir.join("ab_test_report.md");
         std::fs::write(&md_path, md)?;
-        println!("wrote A/B markdown: {}", md_path.display());
+        println!(
+            "{}",
+            util::console::info("wrote A/B markdown", md_path.display().to_string())
+        );
     }
 
-    println!("wrote A/B report: {}", report_path.display());
-    println!("industrial wav: {}", report.industrial.wav);
-    println!("baseline wav: {}", report.baseline.wav);
-    println!("delta t60_s_est: {:.3}", report.delta.t60_s_est);
+    println!(
+        "{}",
+        util::console::info("wrote A/B report", report_path.display().to_string())
+    );
+    println!(
+        "{}",
+        util::console::info("industrial wav", report.industrial.wav.clone())
+    );
+    println!(
+        "{}",
+        util::console::info("baseline wav", report.baseline.wav.clone())
+    );
+    println!(
+        "{}",
+        util::console::metric("delta t60_s_est", format!("{:.3}", report.delta.t60_s_est))
+    );
     Ok(())
 }
 
@@ -192,9 +208,6 @@ fn build_generate_args(
         macro_material: args.macro_material,
         macro_clarity: args.macro_clarity,
         macro_trajectory: args.macro_trajectory.clone(),
-        channels: match args.channels {
-            ChannelFormatArg::Mono => ChannelFormatArg::Mono,
-            ChannelFormatArg::Stereo => ChannelFormatArg::Stereo,
-        },
+        channels: args.channels,
     }
 }

@@ -4,7 +4,7 @@
 
 - Stable CLI with subcommands: `generate`, `analyze`, `morph`, `render`, `sample`, `preset`
 - Canonical descriptor model and preset system
-- Procedural deterministic IR generator (mono/stereo)
+- Procedural deterministic IR generator (mono/stereo + FOA/surround/Atmos layouts)
 - Approximate engineering analysis metrics and JSON reports
 - Offline convolution rendering path
 - Core tests for deterministic behavior and pipeline sanity

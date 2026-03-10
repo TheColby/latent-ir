@@ -51,6 +51,34 @@ pub struct SpatialDescriptors {
 pub enum ChannelFormat {
     Mono,
     Stereo,
+    FoaAmbix,
+    Surround5_1,
+    Surround7_1,
+    Atmos7_1_4,
+    Atmos7_2_4,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChannelSpec {
+    pub label: &'static str,
+    pub azimuth_deg: i16,
+    pub elevation_deg: i16,
+    pub is_lfe: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpatialEncoding {
+    Discrete,
+    AmbisonicFoaAmbix,
+}
+
+impl SpatialEncoding {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Discrete => "discrete",
+            Self::AmbisonicFoaAmbix => "ambisonic_foa_ambix",
+        }
+    }
 }
 
 impl ChannelFormat {
@@ -58,7 +86,328 @@ impl ChannelFormat {
         match self {
             Self::Mono => 1,
             Self::Stereo => 2,
+            Self::FoaAmbix => 4,
+            Self::Surround5_1 => 6,
+            Self::Surround7_1 => 8,
+            Self::Atmos7_1_4 => 12,
+            Self::Atmos7_2_4 => 13,
         }
+    }
+
+    pub fn layout_name(self) -> &'static str {
+        match self {
+            Self::Mono => "mono",
+            Self::Stereo => "stereo",
+            Self::FoaAmbix => "foa_ambix",
+            Self::Surround5_1 => "surround_5_1",
+            Self::Surround7_1 => "surround_7_1",
+            Self::Atmos7_1_4 => "atmos_7_1_4",
+            Self::Atmos7_2_4 => "atmos_7_2_4",
+        }
+    }
+
+    pub fn spatial_encoding(self) -> SpatialEncoding {
+        match self {
+            Self::FoaAmbix => SpatialEncoding::AmbisonicFoaAmbix,
+            _ => SpatialEncoding::Discrete,
+        }
+    }
+
+    pub fn channel_specs(self) -> &'static [ChannelSpec] {
+        match self {
+            Self::Mono => &[ChannelSpec {
+                label: "M",
+                azimuth_deg: 0,
+                elevation_deg: 0,
+                is_lfe: false,
+            }],
+            Self::Stereo => &[
+                ChannelSpec {
+                    label: "L",
+                    azimuth_deg: 30,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "R",
+                    azimuth_deg: -30,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+            ],
+            Self::FoaAmbix => &[
+                ChannelSpec {
+                    label: "W",
+                    azimuth_deg: 0,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "X",
+                    azimuth_deg: 0,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "Y",
+                    azimuth_deg: 0,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "Z",
+                    azimuth_deg: 0,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+            ],
+            Self::Surround5_1 => &[
+                ChannelSpec {
+                    label: "L",
+                    azimuth_deg: 30,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "R",
+                    azimuth_deg: -30,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "C",
+                    azimuth_deg: 0,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "LFE",
+                    azimuth_deg: 0,
+                    elevation_deg: 0,
+                    is_lfe: true,
+                },
+                ChannelSpec {
+                    label: "Ls",
+                    azimuth_deg: 110,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "Rs",
+                    azimuth_deg: -110,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+            ],
+            Self::Surround7_1 => &[
+                ChannelSpec {
+                    label: "L",
+                    azimuth_deg: 30,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "R",
+                    azimuth_deg: -30,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "C",
+                    azimuth_deg: 0,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "LFE",
+                    azimuth_deg: 0,
+                    elevation_deg: 0,
+                    is_lfe: true,
+                },
+                ChannelSpec {
+                    label: "Ls",
+                    azimuth_deg: 90,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "Rs",
+                    azimuth_deg: -90,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "Lrs",
+                    azimuth_deg: 150,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "Rrs",
+                    azimuth_deg: -150,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+            ],
+            Self::Atmos7_1_4 => &[
+                ChannelSpec {
+                    label: "L",
+                    azimuth_deg: 30,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "R",
+                    azimuth_deg: -30,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "C",
+                    azimuth_deg: 0,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "LFE",
+                    azimuth_deg: 0,
+                    elevation_deg: 0,
+                    is_lfe: true,
+                },
+                ChannelSpec {
+                    label: "Ls",
+                    azimuth_deg: 90,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "Rs",
+                    azimuth_deg: -90,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "Lrs",
+                    azimuth_deg: 150,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "Rrs",
+                    azimuth_deg: -150,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "Ltf",
+                    azimuth_deg: 35,
+                    elevation_deg: 45,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "Rtf",
+                    azimuth_deg: -35,
+                    elevation_deg: 45,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "Ltr",
+                    azimuth_deg: 145,
+                    elevation_deg: 45,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "Rtr",
+                    azimuth_deg: -145,
+                    elevation_deg: 45,
+                    is_lfe: false,
+                },
+            ],
+            Self::Atmos7_2_4 => &[
+                ChannelSpec {
+                    label: "L",
+                    azimuth_deg: 30,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "R",
+                    azimuth_deg: -30,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "C",
+                    azimuth_deg: 0,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "LFE1",
+                    azimuth_deg: 0,
+                    elevation_deg: 0,
+                    is_lfe: true,
+                },
+                ChannelSpec {
+                    label: "LFE2",
+                    azimuth_deg: 0,
+                    elevation_deg: 0,
+                    is_lfe: true,
+                },
+                ChannelSpec {
+                    label: "Ls",
+                    azimuth_deg: 90,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "Rs",
+                    azimuth_deg: -90,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "Lrs",
+                    azimuth_deg: 150,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "Rrs",
+                    azimuth_deg: -150,
+                    elevation_deg: 0,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "Ltf",
+                    azimuth_deg: 35,
+                    elevation_deg: 45,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "Rtf",
+                    azimuth_deg: -35,
+                    elevation_deg: 45,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "Ltr",
+                    azimuth_deg: 145,
+                    elevation_deg: 45,
+                    is_lfe: false,
+                },
+                ChannelSpec {
+                    label: "Rtr",
+                    azimuth_deg: -145,
+                    elevation_deg: 45,
+                    is_lfe: false,
+                },
+            ],
+        }
+    }
+
+    pub fn channel_labels(self) -> Vec<&'static str> {
+        self.channel_specs().iter().map(|c| c.label).collect()
     }
 }
 

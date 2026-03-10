@@ -48,6 +48,12 @@ impl IrAnalyzer {
         if t60.is_none() {
             warnings.push("T60 estimate unavailable due to insufficient decay range".to_string());
         }
+        if c > 2 {
+            warnings.push(
+                "stereo_correlation reports channel 0/1 pair only for multichannel material"
+                    .to_string(),
+            );
+        }
 
         let spectral_centroid_hz = estimate_centroid(&mono, sample_rate);
         let (low, mid, high) = estimate_band_decays(&mono, sample_rate);

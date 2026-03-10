@@ -1,6 +1,6 @@
 use approx::assert_relative_eq;
 use latent_ir::core::analysis::IrAnalyzer;
-use latent_ir::core::descriptors::DescriptorSet;
+use latent_ir::core::descriptors::{ChannelFormat, DescriptorSet};
 use latent_ir::core::generator::{IrGenerator, ProceduralIrGenerator};
 use latent_ir::core::morph::IrMorpher;
 use latent_ir::core::presets;
@@ -54,6 +54,28 @@ fn deterministic_generation_by_seed() {
     assert_eq!(a.channels.len(), b.channels.len());
     assert_eq!(a.channels[0].len(), b.channels[0].len());
     assert_relative_eq!(a.channels[0][100], b.channels[0][100], epsilon = 1e-7);
+}
+
+#[test]
+fn foa_generation_emits_four_channels() {
+    let mut d = DescriptorSet::default();
+    d.spatial.channel_format = ChannelFormat::FoaAmbix;
+    d.time.duration = 0.25;
+    let g = ProceduralIrGenerator::new(48_000);
+    let out = g.generate(&d, 2026).unwrap();
+    assert_eq!(out.channels.len(), 4);
+    assert!(out.channels.iter().all(|ch| !ch.is_empty()));
+}
+
+#[test]
+fn atmos_7_2_4_generation_emits_thirteen_channels() {
+    let mut d = DescriptorSet::default();
+    d.spatial.channel_format = ChannelFormat::Atmos7_2_4;
+    d.time.duration = 0.2;
+    let g = ProceduralIrGenerator::new(48_000);
+    let out = g.generate(&d, 2027).unwrap();
+    assert_eq!(out.channels.len(), 13);
+    assert!(out.channels.iter().all(|ch| !ch.is_empty()));
 }
 
 #[test]

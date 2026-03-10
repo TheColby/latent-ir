@@ -25,9 +25,21 @@ fn run_text(args: TrainTextEncoderArgs) -> Result<()> {
     let model = train_text_encoder(&args.dataset, &cfg)?;
     util::json::write_pretty_json(&args.output, &model)?;
 
-    println!("trained text encoder model: {}", args.output.display());
-    println!("embedding_dim: {}", model.embedding_dim);
-    println!("vocab_size: {}", model.token_embeddings.len());
+    println!(
+        "{}",
+        util::console::info(
+            "trained text encoder model",
+            args.output.display().to_string()
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric("embedding_dim", model.embedding_dim)
+    );
+    println!(
+        "{}",
+        util::console::metric("vocab_size", model.token_embeddings.len())
+    );
     Ok(())
 }
 
@@ -41,8 +53,20 @@ fn run_audio(args: TrainAudioEncoderArgs) -> Result<()> {
     let model = train_audio_encoder(&args.dataset, &cfg)?;
     util::json::write_pretty_json(&args.output, &model)?;
 
-    println!("trained audio encoder model: {}", args.output.display());
-    println!("feature_dim: {}", model.feature_names.len());
-    println!("hidden_dim: {}", model.hidden_bias.len());
+    println!(
+        "{}",
+        util::console::info(
+            "trained audio encoder model",
+            args.output.display().to_string()
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric("feature_dim", model.feature_names.len())
+    );
+    println!(
+        "{}",
+        util::console::metric("hidden_dim", model.hidden_bias.len())
+    );
     Ok(())
 }

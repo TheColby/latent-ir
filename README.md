@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/latent-ir-logo.png" alt="latent-ir logo" />
+</p>
+
 # latent-ir
 
 **Generative impulse responses and acoustic spaces for the command line.**
@@ -13,9 +17,10 @@ Current versions are procedural DSP + rule-based semantic conditioning. This rep
 
 Most reverbs expose fixed presets or static measured spaces. `latent-ir` treats reverb as a controllable acoustic design space: scriptable, analyzable, reproducible, and extensible.
 
-## Feature Overview (v0.1 scaffold)
+## Feature Overview (current scaffold)
 
 - Descriptor-conditioned IR generation (`generate`)
+- Spatial layout generation for `mono`, `stereo`, `foa` (ambiX), `5.1`, `7.1`, `7.1.4`, `7.2.4`
 - Engineering-focused IR analysis (`analyze`)
 - IR morphing between two spaces (`morph`)
 - Offline convolution rendering (`render`)
@@ -26,9 +31,9 @@ Most reverbs expose fixed presets or static measured spaces. `latent-ir` treats 
 - Benchmark lab + CI gating utility (`benchmark`)
 - Model manifest validation utility (`model validate`)
 - One-shot industrial-vs-baseline comparison utility (`ab-test`)
-- Learned text/audio conditioning encoders loaded from JSON model files
+- Learned text/audio conditioning encoders loaded from JSON (plus optional ONNX backend)
 - Deterministic generation via explicit seed
-- JSON metadata + analysis output for reproducibility
+- JSON metadata + analysis output for reproducibility, including channel format, spatial encoding, and channel labels
 
 ## Architecture Overview
 
@@ -60,15 +65,14 @@ This is an initial but functional scaffold with real behavior in core commands.
 
 Implemented now:
 
-- procedural mono/stereo IR generation with direct impulse, early reflections, dense stochastic tail, simple band-dependent decay shaping, deterministic seed
+- procedural IR generation for mono/stereo + multichannel layouts (`foa`, `5.1`, `7.1`, `7.1.4`, `7.2.4`) with direct impulse, early reflections, dense stochastic tail, simple band-dependent decay shaping, deterministic seed
 - approximate T20/T30/T60/EDT/predelay/EDC-centric analysis
 - spectral centroid and low/mid/high decay estimates
-- stereo correlation + early/late energy summaries
+- stereo pair correlation (channel 0/1) + early/late energy summaries
 - offline WAV convolution with wet/dry control
 
 Not implemented yet:
 
-- learned text/audio encoders
 - latent diffusion/autoencoder style IR synthesis
 - standards-certified architectural acoustics reporting
 - geometric or wave-based room simulation
@@ -158,6 +162,31 @@ cargo run -- generate \
   --output out/bunker_ir.wav
 ```
 
+Generate FOA ambisonic IR (ambiX channel order):
+
+```bash
+cargo run -- generate \
+  --prompt "massive concrete grain silo" \
+  --channels foa \
+  --output out/silo_foa.wav
+```
+
+Generate Atmos-style 7.2.4 bed IR:
+
+```bash
+cargo run -- generate \
+  --prompt "industrial aircraft hangar" \
+  --channels 7.2.4 \
+  --output out/hangar_724.wav
+```
+
+Generate 5.1 and 7.1.4 variants from the same prompt:
+
+```bash
+cargo run -- generate --prompt "dark concrete transit terminal" --channels 5.1 --output out/terminal_51.wav
+cargo run -- generate --prompt "dark concrete transit terminal" --channels 7.1.4 --output out/terminal_714.wav
+```
+
 Analyze IR with JSON output:
 
 ```bash
@@ -199,13 +228,47 @@ Inspect one preset:
 cargo run -- preset dark_stone_cathedral --json
 ```
 
+## Spatial Audio Examples
+
+FOA (ambiX `WXYZ`) generation + analysis:
+
+```bash
+cargo run -- generate \
+  --prompt "massive cylindrical grain silo, thick concrete, very long decay" \
+  --channels foa \
+  --metadata-out out/silo_foa.meta.json \
+  --output out/silo_foa.wav
+
+cargo run -- analyze out/silo_foa.wav --json --output out/silo_foa.analysis.json
+```
+
+Atmos-style 7.2.4 bed generation + render:
+
+```bash
+cargo run -- generate \
+  --prompt "aircraft hangar with long metallic late tail" \
+  --channels 7.2.4 \
+  --output out/hangar_724_ir.wav \
+  --metadata-out out/hangar_724_ir.json
+
+cargo run -- render \
+  dry_724.wav \
+  --ir out/hangar_724_ir.wav \
+  --engine fft-partitioned \
+  --partition-size 2048 \
+  --mix 0.3 \
+  --output out/hangar_724_render.wav
+```
+
+Spatial metadata fields (`channel_format`, `spatial_encoding`, `channel_labels`) are emitted in generation JSON for downstream DAW/tooling workflows.
+
 ## Command Reference
 
 - `generate`
-  - Inputs: optional `--prompt`, optional `--preset`, optional learned encoders (`--text-encoder-model`, `--audio-encoder-model`, `--text-encoder-onnx`, `--audio-encoder-onnx`, `--reference-audio`), descriptor overrides (`--duration`, `--t60`, `--predelay-ms`, `--edt`, etc.), channel format, seed
+  - Inputs: optional `--prompt`, optional `--preset`, optional learned encoders (`--text-encoder-model`, `--audio-encoder-model`, `--text-encoder-onnx`, `--audio-encoder-onnx`, `--reference-audio`), descriptor overrides (`--duration`, `--t60`, `--predelay-ms`, `--edt`, etc.), channel format (`mono`, `stereo`, `foa`, `5.1`, `7.1`, `7.1.4`, `7.2.4`), seed
   - Perceptual controls: `--macro-size`, `--macro-distance`, `--macro-material`, `--macro-clarity`, `--macro-trajectory`
   - Outputs: generated IR WAV + companion JSON metadata (or custom `--metadata-out`), optional analysis JSON via `--json-analysis-out`
-  - Console: prints detailed IR/reverb metrics for every generation run (length, EDT/T20/T30/T60, predelay, spectral, energy split, stereo correlation)
+  - Console: prints detailed IR/reverb metrics for every generation run (layout, labels, length, EDT/T20/T30/T60, predelay, spectral, energy split, stereo pair correlation)
 - `analyze`
   - Inputs: IR WAV
   - Outputs: console metrics or JSON analysis report
@@ -320,6 +383,7 @@ cargo run -- ab-test \
 - Prompt interpretation is deterministic token matching, not an LLM/transformer encoder.
 - Acoustic metrics are engineering estimates for development and comparison, not certified room-acoustics measurements.
 - IR generation is synthetic and intentionally practical; it does not claim full physical room simulation.
+- Spatial outputs are layout-projected synthetic IRs; current support is not an object-based Atmos renderer or standards-certified ambisonic room simulation.
 
 ## JSON Schema Stability (v0)
 
@@ -382,11 +446,11 @@ Please open an issue describing:
 
 Prompt ideas:
 
-- `"intimate wood chapel"`
-- `"dark stone cathedral"`
-- `"steel bunker"`
-- `"bright glass corridor"`
-- `"impossible infinite tunnel"`
+- `"massive, colossal grain silo made of 3 ft poured concrete, rt60 27 seconds"`
+- `"narrow maintenance tunnel with corrugated steel and harsh flutter"`
+- `"abandoned underground cistern, booming low end, very long tail"`
+- `"small machine room with concrete walls and moderate metallic ring"`
+- `"distant source in a huge empty aircraft hangar, dark and diffuse"`
 
 Built-in presets:
 

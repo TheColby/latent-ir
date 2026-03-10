@@ -23,10 +23,22 @@ fn run_suite(args: BenchmarkRunArgs) -> Result<()> {
     let report = run_benchmark(&cfg)?;
     util::json::write_pretty_json(&args.output, &report)?;
 
-    println!("wrote benchmark report: {}", args.output.display());
-    println!("samples: {}", report.sample_count);
-    println!("objective_score: {:.6}", report.summary.objective_score);
-    println!("total_score: {:.6}", report.summary.total_score);
+    println!(
+        "{}",
+        util::console::info("wrote benchmark report", args.output.display().to_string())
+    );
+    println!("{}", util::console::metric("samples", report.sample_count));
+    println!(
+        "{}",
+        util::console::metric(
+            "objective_score",
+            format!("{:.6}", report.summary.objective_score)
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric("total_score", format!("{:.6}", report.summary.total_score))
+    );
     Ok(())
 }
 
@@ -37,12 +49,12 @@ fn run_check(args: BenchmarkCheckArgs) -> Result<()> {
 
     let result = check_benchmark(&report, &baseline, args.max_regression);
     if result.passed {
-        println!("benchmark check passed");
+        println!("{}", util::console::success("benchmark check passed"));
         return Ok(());
     }
 
     for r in result.regressions {
-        eprintln!("regression: {r}");
+        eprintln!("{}", util::console::error(&format!("regression: {r}")));
     }
     Err(anyhow!("benchmark check failed"))
 }

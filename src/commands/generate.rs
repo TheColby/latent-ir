@@ -139,10 +139,7 @@ pub fn run(args: GenerateArgs) -> Result<()> {
     descriptor.apply_spectral_overrides(args.brightness, None, None, None);
     descriptor.apply_structure_overrides(args.early_density, args.late_density, args.diffusion);
     descriptor.apply_spatial_overrides(
-        Some(match args.channels {
-            ChannelFormatArg::Mono => ChannelFormat::Mono,
-            ChannelFormatArg::Stereo => ChannelFormat::Stereo,
-        }),
+        Some(channel_format_from_arg(args.channels)),
         args.width,
         args.decorrelation,
         None,
@@ -160,6 +157,12 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         .with_context(|| format!("failed to write {}", args.output.display()))?;
 
     let analysis = IrAnalyzer::default().analyze(&generated.channels, args.sample_rate);
+    let resolved_channel_format = descriptor.spatial.channel_format;
+    let channel_labels = resolved_channel_format
+        .channel_labels()
+        .into_iter()
+        .map(str::to_string)
+        .collect();
 
     let metadata = GenerationMetadata {
         schema_version: "latent-ir.generation.v1".to_string(),
@@ -171,6 +174,12 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         preset: args.preset,
         conditioning,
         sample_rate: args.sample_rate,
+        spatial_encoding: resolved_channel_format
+            .spatial_encoding()
+            .as_str()
+            .to_string(),
+        channel_format: resolved_channel_format.layout_name().to_string(),
+        channel_labels,
         descriptor,
         warnings: analysis.warnings.clone(),
         generated_at_utc: Utc::now(),
@@ -187,48 +196,116 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         println!("wrote analysis: {}", analysis_path.display());
     }
 
-    print_generation_metrics(&metadata.analysis);
+    print_generation_metrics(&metadata.analysis, resolved_channel_format);
     println!("wrote IR: {}", args.output.display());
     println!("wrote metadata: {}", metadata_path.display());
     Ok(())
 }
 
-fn print_generation_metrics(r: &AnalysisReport) {
-    println!("--- generated IR metrics ---");
-    println!("sample_rate_hz: {}", r.sample_rate);
-    println!("channels: {}", r.channels);
-    println!("ir_length_s: {:.4}", r.duration_s);
-    println!("peak: {:.6}", r.peak);
-    println!("rms: {:.6}", r.rms);
-    println!("predelay_ms_est: {:.3}", r.predelay_ms_est);
-    println!("edt_s_est: {:.4}", r.edt_s_est.unwrap_or(-1.0));
-    println!("t20_s_est: {:.4}", r.t20_s_est.unwrap_or(-1.0));
-    println!("t30_s_est: {:.4}", r.t30_s_est.unwrap_or(-1.0));
-    println!("t60_s_est: {:.4}", r.t60_s_est.unwrap_or(-1.0));
-    println!("spectral_centroid_hz: {:.2}", r.spectral_centroid_hz);
+fn channel_format_from_arg(arg: ChannelFormatArg) -> ChannelFormat {
+    match arg {
+        ChannelFormatArg::Mono => ChannelFormat::Mono,
+        ChannelFormatArg::Stereo => ChannelFormat::Stereo,
+        ChannelFormatArg::Foa => ChannelFormat::FoaAmbix,
+        ChannelFormatArg::Surround5_1 => ChannelFormat::Surround5_1,
+        ChannelFormatArg::Surround7_1 => ChannelFormat::Surround7_1,
+        ChannelFormatArg::Atmos7_1_4 => ChannelFormat::Atmos7_1_4,
+        ChannelFormatArg::Atmos7_2_4 => ChannelFormat::Atmos7_2_4,
+    }
+}
+
+fn print_generation_metrics(r: &AnalysisReport, channel_format: ChannelFormat) {
+    println!("{}", util::console::section("--- generated IR metrics ---"));
+    println!("{}", util::console::metric("sample_rate_hz", r.sample_rate));
     println!(
-        "band_decay_low_s: {:.4}",
-        r.band_decay_low_s.unwrap_or(-1.0)
+        "{}",
+        util::console::metric("channel_format", channel_format.layout_name())
     );
     println!(
-        "band_decay_mid_s: {:.4}",
-        r.band_decay_mid_s.unwrap_or(-1.0)
+        "{}",
+        util::console::metric("channel_labels", channel_format.channel_labels().join(","))
+    );
+    println!("{}", util::console::metric("channels", r.channels));
+    println!(
+        "{}",
+        util::console::metric("ir_length_s", format!("{:.4}", r.duration_s))
     );
     println!(
-        "band_decay_high_s: {:.4}",
-        r.band_decay_high_s.unwrap_or(-1.0)
+        "{}",
+        util::console::metric("peak", format!("{:.6}", r.peak))
     );
-    println!("early_energy_ratio: {:.5}", r.early_energy_ratio);
-    println!("late_energy_ratio: {:.5}", r.late_energy_ratio);
+    println!("{}", util::console::metric("rms", format!("{:.6}", r.rms)));
     println!(
-        "stereo_correlation: {:.5}",
-        r.stereo_correlation.unwrap_or(1.0)
+        "{}",
+        util::console::metric("predelay_ms_est", format!("{:.3}", r.predelay_ms_est))
+    );
+    println!(
+        "{}",
+        util::console::metric("edt_s_est", format!("{:.4}", r.edt_s_est.unwrap_or(-1.0)))
+    );
+    println!(
+        "{}",
+        util::console::metric("t20_s_est", format!("{:.4}", r.t20_s_est.unwrap_or(-1.0)))
+    );
+    println!(
+        "{}",
+        util::console::metric("t30_s_est", format!("{:.4}", r.t30_s_est.unwrap_or(-1.0)))
+    );
+    println!(
+        "{}",
+        util::console::metric("t60_s_est", format!("{:.4}", r.t60_s_est.unwrap_or(-1.0)))
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "spectral_centroid_hz",
+            format!("{:.2}", r.spectral_centroid_hz)
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "band_decay_low_s",
+            format!("{:.4}", r.band_decay_low_s.unwrap_or(-1.0))
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "band_decay_mid_s",
+            format!("{:.4}", r.band_decay_mid_s.unwrap_or(-1.0))
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "band_decay_high_s",
+            format!("{:.4}", r.band_decay_high_s.unwrap_or(-1.0))
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric("early_energy_ratio", format!("{:.5}", r.early_energy_ratio))
+    );
+    println!(
+        "{}",
+        util::console::metric("late_energy_ratio", format!("{:.5}", r.late_energy_ratio))
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "stereo_correlation",
+            match r.stereo_correlation {
+                Some(v) => format!("{v:.5}"),
+                None => "n/a".to_string(),
+            }
+        )
     );
     if !r.warnings.is_empty() {
-        println!("warnings:");
+        println!("{}", util::console::warning("warnings:"));
         for w in &r.warnings {
-            println!("  - {}", w);
+            println!("  {}", util::console::warning(&format!("- {w}")));
         }
     }
-    println!("----------------------------");
+    println!("{}", util::console::section("----------------------------"));
 }

@@ -32,11 +32,12 @@ Generation pipeline resolves descriptor values from:
 The procedural generator synthesizes IRs as layered components:
 
 1. direct impulse at predelay
-2. sparse early reflection field with density and stereo spread
+2. sparse early reflection field with density and spatial spread
 3. dense late stochastic tail
 4. frequency-weighted envelope shaping via band-dependent decay constants
-5. stereo decorrelation jitter and width shaping
-6. output normalization and sanity bounds
+5. layout projection: discrete speaker layouts (`mono`, `stereo`, `5.1`, `7.1`, `7.1.4`, `7.2.4`) or FOA ambiX (`WXYZ`)
+6. decorrelation jitter and width shaping
+7. output normalization and sanity bounds
 
 This is intentionally practical, deterministic, and auditable.
 
@@ -69,7 +70,7 @@ v0 analysis targets robust engineering estimates suitable for CLI workflows:
 - predelay estimate
 - spectral centroid summary
 - coarse low/mid/high decay splits
-- stereo correlation
+- stereo pair correlation (channel 0/1 for multichannel material)
 - early-vs-late energy ratio
 
 Metrics are intentionally labeled as approximations where standards-grade compliance is not yet implemented.

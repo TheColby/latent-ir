@@ -139,6 +139,7 @@ pub struct GenerateArgs {
     #[arg(long)]
     pub macro_trajectory: Option<PathBuf>,
 
+    /// Output channel format (`mono`, `stereo`, `foa`, `5.1`, `7.1`, `7.1.4`, `7.2.4`).
     #[arg(long, value_enum, default_value_t = ChannelFormatArg::Stereo)]
     pub channels: ChannelFormatArg,
 }
@@ -448,6 +449,7 @@ pub struct AbTestArgs {
     pub macro_clarity: Option<f32>,
     #[arg(long)]
     pub macro_trajectory: Option<PathBuf>,
+    /// Output channel format (`mono`, `stereo`, `foa`, `5.1`, `7.1`, `7.1.4`, `7.2.4`).
     #[arg(long, value_enum, default_value_t = ChannelFormatArg::Stereo)]
     pub channels: ChannelFormatArg,
     /// Write a markdown scorecard (`ab_test_report.md`) in output directory.
@@ -457,8 +459,35 @@ pub struct AbTestArgs {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum ChannelFormatArg {
+    #[value(alias = "1.0")]
     Mono,
+    #[value(alias = "2.0")]
     Stereo,
+    #[value(
+        name = "foa",
+        alias = "foa-ambix",
+        alias = "ambix",
+        alias = "ambisonic"
+    )]
+    Foa,
+    #[value(
+        name = "5.1",
+        alias = "surround-5.1",
+        alias = "surround5.1",
+        alias = "5_1"
+    )]
+    Surround5_1,
+    #[value(
+        name = "7.1",
+        alias = "surround-7.1",
+        alias = "surround7.1",
+        alias = "7_1"
+    )]
+    Surround7_1,
+    #[value(name = "7.1.4", alias = "atmos-7.1.4", alias = "7_1_4")]
+    Atmos7_1_4,
+    #[value(name = "7.2.4", alias = "atmos-7.2.4", alias = "7_2_4")]
+    Atmos7_2_4,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
