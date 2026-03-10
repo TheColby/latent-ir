@@ -3,6 +3,7 @@ use anyhow::Result;
 use crate::cli::{Cli, Commands};
 
 mod analyze;
+mod eval;
 mod generate;
 mod morph;
 mod preset;
@@ -19,5 +20,6 @@ pub fn dispatch(cli: Cli) -> Result<()> {
         Commands::Sample(args) => sample::run(args),
         Commands::Preset(args) => preset::run(args),
         Commands::TrainEncoder(args) => train_encoder::run(args),
+        Commands::Eval(args) => eval::run(args),
     }
 }

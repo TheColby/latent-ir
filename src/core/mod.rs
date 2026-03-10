@@ -1,6 +1,7 @@
 pub mod analysis;
 pub mod conditioning;
 pub mod descriptors;
+pub mod eval;
 pub mod generator;
 pub mod morph;
 pub mod presets;

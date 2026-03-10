@@ -22,6 +22,7 @@ Most reverbs expose fixed presets or static measured spaces. `latent-ir` treats 
 - Descriptor sampling utilities (`sample`)
 - Built-in preset inspection and retrieval (`preset`)
 - Model fitting utility for lightweight learned encoders (`train-encoder`)
+- Evaluation utility with baseline reports for regression tracking (`eval`)
 - Learned text/audio conditioning encoders loaded from JSON model files
 - Deterministic generation via explicit seed
 - JSON metadata + analysis output for reproducibility
@@ -153,6 +154,17 @@ Render dry signal through IR:
 cargo run -- render dry_input.wav --ir out/morphed.wav --mix 0.25 --output out/rendered.wav
 ```
 
+Render using FFT partitioned convolution:
+
+```bash
+cargo run -- render dry_input.wav \
+  --ir out/morphed.wav \
+  --engine fft-partitioned \
+  --partition-size 2048 \
+  --mix 0.25 \
+  --output out/rendered_fft.wav
+```
+
 List presets:
 
 ```bash
@@ -178,6 +190,7 @@ cargo run -- preset dark_stone_cathedral --json
   - Outputs: morphed IR WAV
 - `render`
   - Inputs: dry WAV + `--ir` + `--mix`
+  - Optional performance controls: `--engine auto|direct|fft-partitioned`, `--partition-size`
   - Outputs: rendered WAV
 - `sample`
   - Inputs: count + seed
@@ -188,6 +201,9 @@ cargo run -- preset dark_stone_cathedral --json
 - `train-encoder`
   - Modes: `text`, `audio`
   - Outputs: learned model JSON compatible with `--text-encoder-model` / `--audio-encoder-model`
+- `eval`
+  - Modes: `text`, `audio`
+  - Outputs: baseline evaluation JSON (`latent-ir.eval.baseline.v1`) with descriptor-space and analysis-space errors
 
 Train text encoder from labeled prompt data:
 
@@ -208,6 +224,24 @@ cargo run -- train-encoder audio \
   --epochs 1000
 ```
 
+Evaluate text encoder on held-out data:
+
+```bash
+cargo run -- eval text \
+  --dataset datasets/text_eval.json \
+  --model models/text_encoder_v1.json \
+  --output reports/text_baseline.json
+```
+
+Evaluate audio encoder on held-out data:
+
+```bash
+cargo run -- eval audio \
+  --dataset datasets/audio_eval.json \
+  --model models/audio_encoder_v1.json \
+  --output reports/audio_baseline.json
+```
+
 ## Limitations and Honesty
 
 - v0 uses procedural DSP and rule-based prompt semantics only.
@@ -219,6 +253,7 @@ cargo run -- train-encoder audio \
 
 - Generation metadata includes `schema_version: "latent-ir.generation.v1"`.
 - Analysis reports include `schema_version: "latent-ir.analysis.v1"`.
+- Evaluation baseline reports include `schema_version: "latent-ir.eval.baseline.v1"`.
 - These version tags are intended for machine parsing and forward compatibility as report fields evolve.
 
 ## Hybrid DSP + ML Direction

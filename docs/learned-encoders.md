@@ -95,3 +95,22 @@ JSON array:
 ```
 
 Audio paths are resolved relative to the dataset file when not absolute.
+
+## Evaluation Utility
+
+Use `eval text` or `eval audio` to generate baseline reports for held-out sets.
+
+Baseline report schema:
+
+- `schema_version`: `latent-ir.eval.baseline.v1`
+- `sample_count`
+- `descriptor_metrics`:
+  - `mae`
+  - `rmse`
+  - `per_field_mae`
+- `analysis_metrics`:
+  - `mae`
+  - `rmse`
+  - `per_metric_mae`
+
+This report is intended to be checked in or archived so future model/generator changes can be compared against a stable reference.

@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 
-use crate::cli::RenderArgs;
-use crate::core::render::Renderer;
+use crate::cli::{RenderArgs, RenderEngineArg};
+use crate::core::render::{RenderEngine, RenderOptions, Renderer};
 use crate::core::util;
 
 pub fn run(args: RenderArgs) -> Result<()> {
@@ -16,7 +16,21 @@ pub fn run(args: RenderArgs) -> Result<()> {
         "sample rates must match"
     );
 
-    let rendered = Renderer::default().render_convolution(&input.channels, &ir.channels, mix);
+    let engine = match args.engine {
+        RenderEngineArg::Auto => RenderEngine::Auto,
+        RenderEngineArg::Direct => RenderEngine::Direct,
+        RenderEngineArg::FftPartitioned => RenderEngine::FftPartitioned,
+    };
+    let options = RenderOptions {
+        engine,
+        partition_size: args.partition_size,
+    };
+    let rendered = Renderer::default().render_convolution_with_options(
+        &input.channels,
+        &ir.channels,
+        mix,
+        options,
+    );
     util::audio::write_wav_f32(&args.output, input.sample_rate, &rendered)
         .with_context(|| format!("failed to write {}", args.output.display()))?;
     println!("wrote rendered audio: {}", args.output.display());

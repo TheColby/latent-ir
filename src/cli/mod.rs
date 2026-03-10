@@ -25,6 +25,8 @@ pub enum Commands {
     Preset(PresetArgs),
     /// Train lightweight learned conditioning encoders from labeled data.
     TrainEncoder(TrainEncoderArgs),
+    /// Evaluate learned encoders against labeled datasets and emit baseline reports.
+    Eval(EvalArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -147,6 +149,14 @@ pub struct RenderArgs {
     #[arg(long, default_value_t = 0.25)]
     pub mix: f32,
 
+    /// Rendering engine.
+    #[arg(long, value_enum, default_value_t = RenderEngineArg::Auto)]
+    pub engine: RenderEngineArg,
+
+    /// Partition size for FFT partitioned convolution.
+    #[arg(long, default_value_t = 2048)]
+    pub partition_size: usize,
+
     /// Output WAV path.
     #[arg(short, long)]
     pub output: PathBuf,
@@ -235,8 +245,67 @@ pub struct TrainAudioEncoderArgs {
     pub l2: f32,
 }
 
+#[derive(Debug, Clone, Args)]
+pub struct EvalArgs {
+    #[command(subcommand)]
+    pub mode: EvalMode,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub enum EvalMode {
+    /// Evaluate prompt-conditioned text encoder.
+    Text(EvalTextArgs),
+    /// Evaluate reference-audio-conditioned audio encoder.
+    Audio(EvalAudioArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct EvalTextArgs {
+    /// Labeled JSON dataset: [{\"prompt\":...,\"descriptor\":...}, ...]
+    #[arg(long)]
+    pub dataset: PathBuf,
+    /// Learned text encoder model JSON.
+    #[arg(long)]
+    pub model: PathBuf,
+    /// Output baseline report JSON path.
+    #[arg(short, long)]
+    pub output: PathBuf,
+    /// Sample rate used for analysis-space validation synthesis.
+    #[arg(long, default_value_t = 48_000)]
+    pub sample_rate: u32,
+    /// RNG seed for deterministic validation synthesis.
+    #[arg(long, default_value_t = 1234)]
+    pub seed: u64,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct EvalAudioArgs {
+    /// Labeled JSON dataset: [{\"audio_path\":...,\"descriptor\":...}, ...]
+    #[arg(long)]
+    pub dataset: PathBuf,
+    /// Learned audio encoder model JSON.
+    #[arg(long)]
+    pub model: PathBuf,
+    /// Output baseline report JSON path.
+    #[arg(short, long)]
+    pub output: PathBuf,
+    /// Sample rate used for analysis-space validation synthesis.
+    #[arg(long, default_value_t = 48_000)]
+    pub sample_rate: u32,
+    /// RNG seed for deterministic validation synthesis.
+    #[arg(long, default_value_t = 1234)]
+    pub seed: u64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum ChannelFormatArg {
     Mono,
     Stereo,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum RenderEngineArg {
+    Auto,
+    Direct,
+    FftPartitioned,
 }

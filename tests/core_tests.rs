@@ -4,7 +4,7 @@ use latent_ir::core::descriptors::DescriptorSet;
 use latent_ir::core::generator::{IrGenerator, ProceduralIrGenerator};
 use latent_ir::core::morph::IrMorpher;
 use latent_ir::core::presets;
-use latent_ir::core::render::Renderer;
+use latent_ir::core::render::{RenderEngine, RenderOptions, Renderer};
 use latent_ir::core::semantics::SemanticResolver;
 
 #[test]
@@ -69,4 +69,47 @@ fn render_pipeline_identity_for_delta_ir() {
     let out = Renderer.render_convolution(&input, &ir, 1.0);
     assert_eq!(out[0].len(), input[0].len());
     assert_relative_eq!(out[0][2], input[0][2], epsilon = 1e-6);
+}
+
+#[test]
+fn render_fft_partitioned_matches_direct() {
+    let input = vec![{
+        let mut v = vec![0.0f32; 2048];
+        for (i, s) in v.iter_mut().enumerate() {
+            *s = ((i as f32 * 0.013).sin() * 0.3) + ((i as f32 * 0.031).cos() * 0.1);
+        }
+        v
+    }];
+    let ir = vec![{
+        let mut v = vec![0.0f32; 1024];
+        v[0] = 1.0;
+        for (i, s) in v.iter_mut().enumerate().skip(1) {
+            *s = (-(i as f32 / 480.0)).exp() * if i % 7 == 0 { -0.04 } else { 0.04 };
+        }
+        v
+    }];
+
+    let direct = Renderer.render_convolution_with_options(
+        &input,
+        &ir,
+        1.0,
+        RenderOptions {
+            engine: RenderEngine::Direct,
+            partition_size: 256,
+        },
+    );
+    let fft = Renderer.render_convolution_with_options(
+        &input,
+        &ir,
+        1.0,
+        RenderOptions {
+            engine: RenderEngine::FftPartitioned,
+            partition_size: 256,
+        },
+    );
+
+    assert_eq!(direct[0].len(), fft[0].len());
+    for (a, b) in direct[0].iter().zip(fft[0].iter()) {
+        assert_relative_eq!(a, b, epsilon = 2e-4);
+    }
 }
