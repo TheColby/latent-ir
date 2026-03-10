@@ -4,12 +4,14 @@ use chrono::Utc;
 use crate::cli::{ChannelFormatArg, GenerateArgs};
 use crate::core::analysis::IrAnalyzer;
 use crate::core::conditioning::{
-    AudioEncoder, LearnedAudioEncoder, LearnedTextEncoder, TextEncoder,
+    run_conditioning_chain, ConditioningContext, ConditioningModel, JsonAudioConditioningModel,
+    JsonTextConditioningModel, LearnedAudioEncoder, LearnedTextEncoder, OnnxAudioConditioningModel,
+    OnnxTextConditioningModel, SemanticConditioningModel,
 };
 use crate::core::descriptors::{ChannelFormat, DescriptorSet};
-use crate::core::generator::{IrGenerator, ProceduralIrGenerator};
+use crate::core::generator::{generate_with_macro_trajectory, IrGenerator, ProceduralIrGenerator};
+use crate::core::perceptual::{MacroControls, MacroTrajectory};
 use crate::core::presets;
-use crate::core::semantics::SemanticResolver;
 use crate::core::util::{
     self,
     metadata::{ConditioningTrace, GenerationMetadata},
@@ -24,33 +26,114 @@ pub fn run(args: GenerateArgs) -> Result<()> {
             presets::resolve_preset(name).with_context(|| format!("unknown preset '{name}'"))?;
     }
 
-    if let (Some(model_path), Some(prompt)) =
-        (args.text_encoder_model.as_deref(), args.prompt.as_deref())
-    {
+    let reference_audio = if let Some(path) = args.reference_audio.as_deref() {
+        Some(
+            util::audio::read_wav_f32(path)
+                .with_context(|| format!("failed to read {}", path.display()))?,
+        )
+    } else {
+        None
+    };
+    if let Some(path) = args.reference_audio.as_deref() {
+        conditioning.reference_audio = Some(path.display().to_string());
+    }
+
+    let mut chain: Vec<Box<dyn ConditioningModel>> = vec![Box::new(SemanticConditioningModel)];
+    if let Some(model_path) = args.text_encoder_model.as_deref() {
         let model = LearnedTextEncoder::from_json_file(model_path)?;
-        let delta = model.infer_delta_from_prompt(prompt)?;
-        delta.apply_to(&mut descriptor, 1.0);
-        conditioning.text_encoder_model = Some(model_path.display().to_string());
-        conditioning.text_delta = Some(delta);
+        chain.push(Box::new(JsonTextConditioningModel {
+            source_path: model_path.to_path_buf(),
+            model,
+        }));
     }
-
-    if let (Some(model_path), Some(reference_audio)) = (
-        args.audio_encoder_model.as_deref(),
-        args.reference_audio.as_deref(),
-    ) {
-        let reference = util::audio::read_wav_f32(reference_audio)
-            .with_context(|| format!("failed to read {}", reference_audio.display()))?;
+    if let Some(model_path) = args.audio_encoder_model.as_deref() {
         let model = LearnedAudioEncoder::from_json_file(model_path)?;
-        let delta = model.infer_delta_from_audio(&reference.channels, reference.sample_rate)?;
-        delta.apply_to(&mut descriptor, 1.0);
-        conditioning.audio_encoder_model = Some(model_path.display().to_string());
-        conditioning.reference_audio = Some(reference_audio.display().to_string());
-        conditioning.audio_delta = Some(delta);
+        chain.push(Box::new(JsonAudioConditioningModel {
+            source_path: model_path.to_path_buf(),
+            model,
+        }));
+    }
+    if let Some(model_path) = args.text_encoder_onnx.as_deref() {
+        chain.push(Box::new(OnnxTextConditioningModel {
+            source_path: model_path.to_path_buf(),
+        }));
+    }
+    if let Some(model_path) = args.audio_encoder_onnx.as_deref() {
+        chain.push(Box::new(OnnxAudioConditioningModel {
+            source_path: model_path.to_path_buf(),
+        }));
     }
 
-    if let Some(prompt) = args.prompt.as_deref() {
-        SemanticResolver::default().apply_prompt(prompt, &mut descriptor);
+    let ctx = ConditioningContext {
+        prompt: args.prompt.clone(),
+        reference_audio,
+        text_onnx_input_dim: args.text_encoder_onnx_input_dim,
+    };
+    let chain_out = run_conditioning_chain(&chain, &ctx)?;
+    chain_out.total_delta.apply_to(&mut descriptor, 1.0);
+
+    for (name, delta) in chain_out.by_model {
+        match name.as_str() {
+            "text_json" => {
+                conditioning.text_encoder_model = args
+                    .text_encoder_model
+                    .as_ref()
+                    .map(|p| p.display().to_string());
+                conditioning.text_delta = Some(delta);
+            }
+            "text_onnx" => {
+                conditioning.text_encoder_onnx = args
+                    .text_encoder_onnx
+                    .as_ref()
+                    .map(|p| p.display().to_string());
+                if let Some(existing) = conditioning.text_delta.as_mut() {
+                    existing.add_inplace(&delta);
+                } else {
+                    conditioning.text_delta = Some(delta);
+                }
+            }
+            "audio_json" => {
+                conditioning.audio_encoder_model = args
+                    .audio_encoder_model
+                    .as_ref()
+                    .map(|p| p.display().to_string());
+                conditioning.audio_delta = Some(delta);
+            }
+            "audio_onnx" => {
+                conditioning.audio_encoder_onnx = args
+                    .audio_encoder_onnx
+                    .as_ref()
+                    .map(|p| p.display().to_string());
+                if let Some(existing) = conditioning.audio_delta.as_mut() {
+                    existing.add_inplace(&delta);
+                } else {
+                    conditioning.audio_delta = Some(delta);
+                }
+            }
+            _ => {}
+        }
     }
+
+    let mut macros = MacroControls {
+        size: args.macro_size.unwrap_or(0.0),
+        distance: args.macro_distance.unwrap_or(0.0),
+        material: args.macro_material.unwrap_or(0.0),
+        clarity: args.macro_clarity.unwrap_or(0.0),
+    };
+    macros.clamp();
+    if macros != MacroControls::default() {
+        macros.apply_to(&mut descriptor);
+        conditioning.macro_controls = Some(macros.clone());
+    }
+
+    let trajectory = if let Some(path) = args.macro_trajectory.as_deref() {
+        let traj = MacroTrajectory::from_json_file(path)?;
+        conditioning.macro_trajectory = Some(path.display().to_string());
+        traj.apply_static_average(&mut descriptor);
+        Some(traj)
+    } else {
+        None
+    };
 
     descriptor.apply_overrides(args.duration, args.t60, args.predelay_ms, args.edt);
     descriptor.apply_spectral_overrides(args.brightness, None, None, None);
@@ -67,7 +150,11 @@ pub fn run(args: GenerateArgs) -> Result<()> {
     descriptor.clamp();
 
     let generator = ProceduralIrGenerator::new(args.sample_rate);
-    let generated = generator.generate(&descriptor, args.seed)?;
+    let generated = if let Some(traj) = trajectory.as_ref() {
+        generate_with_macro_trajectory(&generator, &descriptor, traj, args.seed)?
+    } else {
+        generator.generate(&descriptor, args.seed)?
+    };
 
     util::audio::write_wav_f32(&args.output, args.sample_rate, &generated.channels)
         .with_context(|| format!("failed to write {}", args.output.display()))?;

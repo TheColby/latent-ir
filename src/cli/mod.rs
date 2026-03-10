@@ -27,6 +27,10 @@ pub enum Commands {
     TrainEncoder(TrainEncoderArgs),
     /// Evaluate learned encoders against labeled datasets and emit baseline reports.
     Eval(EvalArgs),
+    /// Benchmark models/pipelines and emit regression-friendly reports.
+    Benchmark(BenchmarkArgs),
+    /// Validate model manifests and runtime compatibility.
+    Model(ModelArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -39,6 +43,14 @@ pub struct GenerateArgs {
     #[arg(long)]
     pub text_encoder_model: Option<PathBuf>,
 
+    /// Path to a learned ONNX text encoder model (requires `onnx` feature).
+    #[arg(long)]
+    pub text_encoder_onnx: Option<PathBuf>,
+
+    /// Input feature dimension for ONNX text encoder hashing frontend.
+    #[arg(long, default_value_t = 256)]
+    pub text_encoder_onnx_input_dim: usize,
+
     /// Path to reference audio used by learned audio conditioning.
     #[arg(long)]
     pub reference_audio: Option<PathBuf>,
@@ -46,6 +58,10 @@ pub struct GenerateArgs {
     /// Path to a learned audio encoder model JSON.
     #[arg(long)]
     pub audio_encoder_model: Option<PathBuf>,
+
+    /// Path to a learned ONNX audio encoder model (requires `onnx` feature).
+    #[arg(long)]
+    pub audio_encoder_onnx: Option<PathBuf>,
 
     /// Optional built-in preset name.
     #[arg(long)]
@@ -100,6 +116,26 @@ pub struct GenerateArgs {
 
     #[arg(long)]
     pub decorrelation: Option<f32>,
+
+    /// Perceptual macro: perceived size [-1, 1].
+    #[arg(long)]
+    pub macro_size: Option<f32>,
+
+    /// Perceptual macro: source/listener distance [-1, 1].
+    #[arg(long)]
+    pub macro_distance: Option<f32>,
+
+    /// Perceptual macro: material hardness/brightness [-1, 1].
+    #[arg(long)]
+    pub macro_material: Option<f32>,
+
+    /// Perceptual macro: clarity [-1, 1].
+    #[arg(long)]
+    pub macro_clarity: Option<f32>,
+
+    /// Optional macro automation trajectory JSON path.
+    #[arg(long)]
+    pub macro_trajectory: Option<PathBuf>,
 
     #[arg(long, value_enum, default_value_t = ChannelFormatArg::Stereo)]
     pub channels: ChannelFormatArg,
@@ -295,6 +331,77 @@ pub struct EvalAudioArgs {
     /// RNG seed for deterministic validation synthesis.
     #[arg(long, default_value_t = 1234)]
     pub seed: u64,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct BenchmarkArgs {
+    #[command(subcommand)]
+    pub mode: BenchmarkMode,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub enum BenchmarkMode {
+    /// Run benchmark suite on a benchmark dataset.
+    Run(BenchmarkRunArgs),
+    /// Check a benchmark report against a baseline and fail on regressions.
+    Check(BenchmarkCheckArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct BenchmarkRunArgs {
+    /// Benchmark dataset JSON path.
+    #[arg(long)]
+    pub dataset: PathBuf,
+    /// Output benchmark report JSON path.
+    #[arg(short, long)]
+    pub output: PathBuf,
+    /// Optional learned text encoder JSON model.
+    #[arg(long)]
+    pub text_model: Option<PathBuf>,
+    /// Optional learned audio encoder JSON model.
+    #[arg(long)]
+    pub audio_model: Option<PathBuf>,
+    /// Sample rate for synthesis/analysis passes.
+    #[arg(long, default_value_t = 48_000)]
+    pub sample_rate: u32,
+    /// Deterministic seed.
+    #[arg(long, default_value_t = 2026)]
+    pub seed: u64,
+    /// Repeats per sample for stability stats.
+    #[arg(long, default_value_t = 3)]
+    pub repeats: usize,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct BenchmarkCheckArgs {
+    /// Candidate benchmark report JSON path.
+    #[arg(long)]
+    pub report: PathBuf,
+    /// Baseline benchmark report JSON path.
+    #[arg(long)]
+    pub baseline: PathBuf,
+    /// Allowed relative regression threshold (e.g. 0.05 == 5%).
+    #[arg(long, default_value_t = 0.05)]
+    pub max_regression: f32,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct ModelArgs {
+    #[command(subcommand)]
+    pub mode: ModelMode,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub enum ModelMode {
+    /// Validate a model manifest against runtime capabilities.
+    Validate(ModelValidateArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct ModelValidateArgs {
+    /// Model manifest JSON path.
+    #[arg(long)]
+    pub manifest: PathBuf,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]

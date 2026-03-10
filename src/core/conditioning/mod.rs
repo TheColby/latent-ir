@@ -1,10 +1,12 @@
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::core::descriptors::DescriptorSet;
+use crate::core::semantics::SemanticResolver;
+use crate::core::util::audio::AudioBuffer;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DescriptorDelta {
@@ -79,6 +81,37 @@ impl DescriptorDelta {
         self.width += other.width;
         self.decorrelation += other.decorrelation;
         self.asymmetry += other.asymmetry;
+    }
+
+    pub fn from_vector(v: &[f32]) -> Result<Self> {
+        if v.len() != 20 {
+            return Err(anyhow!(
+                "descriptor delta vector must have length 20, got {}",
+                v.len()
+            ));
+        }
+        Ok(Self {
+            duration: v[0],
+            predelay_ms: v[1],
+            t60: v[2],
+            edt: v[3],
+            brightness: v[4],
+            hf_damping: v[5],
+            lf_bloom: v[6],
+            spectral_tilt: v[7],
+            band_decay_low: v[8],
+            band_decay_mid: v[9],
+            band_decay_high: v[10],
+            early_density: v[11],
+            late_density: v[12],
+            diffusion: v[13],
+            modal_density: v[14],
+            tail_noise: v[15],
+            grain: v[16],
+            width: v[17],
+            decorrelation: v[18],
+            asymmetry: v[19],
+        })
     }
 }
 
@@ -533,4 +566,278 @@ fn highpass(x: &[f32], a: f32) -> Vec<f32> {
         y[i] = v - lp;
     }
     y
+}
+
+fn hash_token(token: &str, seed: u64) -> u64 {
+    let mut hash = 1469598103934665603u64 ^ seed;
+    for &b in token.as_bytes() {
+        hash ^= b as u64;
+        hash = hash.wrapping_mul(1099511628211);
+    }
+    hash
+}
+
+pub fn text_hash_features(prompt: &str, dim: usize, seed: u64) -> Vec<f32> {
+    let dim = dim.max(1);
+    let tokens = tokenize(prompt);
+    let mut x = vec![0.0f32; dim];
+    if tokens.is_empty() {
+        return x;
+    }
+    for tok in tokens.iter() {
+        let idx = (hash_token(tok, seed) % dim as u64) as usize;
+        x[idx] += 1.0;
+    }
+    let inv = 1.0 / tokens.len() as f32;
+    for v in &mut x {
+        *v *= inv;
+    }
+    x
+}
+
+#[cfg(feature = "onnx")]
+fn run_onnx(path: &Path, input: &[f32]) -> Result<Vec<f32>> {
+    use tract_onnx::prelude::*;
+
+    let model = tract_onnx::onnx()
+        .model_for_path(path)
+        .with_context(|| format!("failed to load ONNX model {}", path.display()))?
+        .into_optimized()?
+        .into_runnable()?;
+
+    let in_tensor: Tensor = tract_onnx::prelude::tract_ndarray::Array2::from_shape_vec(
+        (1, input.len()),
+        input.to_vec(),
+    )?
+    .into();
+    let outputs = model.run(tvec!(in_tensor.into()))?;
+    let out = outputs
+        .first()
+        .ok_or_else(|| anyhow!("onnx model returned no outputs"))?;
+    let view = out.to_array_view::<f32>()?;
+    Ok(view.iter().copied().collect())
+}
+
+#[cfg(feature = "onnx")]
+pub fn infer_delta_from_text_onnx(
+    path: &Path,
+    prompt: &str,
+    input_dim: usize,
+) -> Result<DescriptorDelta> {
+    let x = text_hash_features(prompt, input_dim, 0xC0DEC0DE);
+    let y = run_onnx(path, &x)?;
+    DescriptorDelta::from_vector(&y[..20.min(y.len())]).or_else(|_| {
+        if y.len() >= 20 {
+            DescriptorDelta::from_vector(&y[0..20])
+        } else {
+            Err(anyhow!(
+                "onnx text model output must provide at least 20 floats, got {}",
+                y.len()
+            ))
+        }
+    })
+}
+
+#[cfg(not(feature = "onnx"))]
+pub fn infer_delta_from_text_onnx(
+    _path: &Path,
+    _prompt: &str,
+    _input_dim: usize,
+) -> Result<DescriptorDelta> {
+    Err(anyhow!(
+        "onnx support not enabled; build with `--features onnx`"
+    ))
+}
+
+#[cfg(feature = "onnx")]
+pub fn infer_delta_from_audio_onnx(
+    path: &Path,
+    channels: &[Vec<f32>],
+    sample_rate: u32,
+) -> Result<DescriptorDelta> {
+    let x = extract_audio_features(channels, sample_rate);
+    let y = run_onnx(path, &x)?;
+    if y.len() < 20 {
+        return Err(anyhow!(
+            "onnx audio model output must provide at least 20 floats, got {}",
+            y.len()
+        ));
+    }
+    DescriptorDelta::from_vector(&y[0..20])
+}
+
+#[cfg(not(feature = "onnx"))]
+pub fn infer_delta_from_audio_onnx(
+    _path: &Path,
+    _channels: &[Vec<f32>],
+    _sample_rate: u32,
+) -> Result<DescriptorDelta> {
+    Err(anyhow!(
+        "onnx support not enabled; build with `--features onnx`"
+    ))
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ConditioningContext {
+    pub prompt: Option<String>,
+    pub reference_audio: Option<AudioBuffer>,
+    pub text_onnx_input_dim: usize,
+}
+
+pub trait ConditioningModel {
+    fn name(&self) -> &str;
+    fn infer_delta(&self, ctx: &ConditioningContext) -> Result<Option<DescriptorDelta>>;
+}
+
+#[derive(Debug, Clone)]
+pub struct JsonTextConditioningModel {
+    pub source_path: PathBuf,
+    pub model: LearnedTextEncoder,
+}
+
+impl ConditioningModel for JsonTextConditioningModel {
+    fn name(&self) -> &str {
+        "text_json"
+    }
+
+    fn infer_delta(&self, ctx: &ConditioningContext) -> Result<Option<DescriptorDelta>> {
+        if let Some(prompt) = ctx.prompt.as_deref() {
+            Ok(Some(self.model.infer_delta_from_prompt(prompt)?))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct JsonAudioConditioningModel {
+    pub source_path: PathBuf,
+    pub model: LearnedAudioEncoder,
+}
+
+impl ConditioningModel for JsonAudioConditioningModel {
+    fn name(&self) -> &str {
+        "audio_json"
+    }
+
+    fn infer_delta(&self, ctx: &ConditioningContext) -> Result<Option<DescriptorDelta>> {
+        if let Some(audio) = ctx.reference_audio.as_ref() {
+            Ok(Some(self.model.infer_delta_from_audio(
+                &audio.channels,
+                audio.sample_rate,
+            )?))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct OnnxTextConditioningModel {
+    pub source_path: PathBuf,
+}
+
+impl ConditioningModel for OnnxTextConditioningModel {
+    fn name(&self) -> &str {
+        "text_onnx"
+    }
+
+    fn infer_delta(&self, ctx: &ConditioningContext) -> Result<Option<DescriptorDelta>> {
+        if let Some(prompt) = ctx.prompt.as_deref() {
+            Ok(Some(infer_delta_from_text_onnx(
+                &self.source_path,
+                prompt,
+                ctx.text_onnx_input_dim,
+            )?))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct OnnxAudioConditioningModel {
+    pub source_path: PathBuf,
+}
+
+impl ConditioningModel for OnnxAudioConditioningModel {
+    fn name(&self) -> &str {
+        "audio_onnx"
+    }
+
+    fn infer_delta(&self, ctx: &ConditioningContext) -> Result<Option<DescriptorDelta>> {
+        if let Some(audio) = ctx.reference_audio.as_ref() {
+            Ok(Some(infer_delta_from_audio_onnx(
+                &self.source_path,
+                &audio.channels,
+                audio.sample_rate,
+            )?))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SemanticConditioningModel;
+
+impl ConditioningModel for SemanticConditioningModel {
+    fn name(&self) -> &str {
+        "semantic_rules"
+    }
+
+    fn infer_delta(&self, ctx: &ConditioningContext) -> Result<Option<DescriptorDelta>> {
+        let Some(prompt) = ctx.prompt.as_deref() else {
+            return Ok(None);
+        };
+        let mut d = DescriptorSet::default();
+        SemanticResolver::default().apply_prompt(prompt, &mut d);
+        let base = DescriptorSet::default();
+        Ok(Some(delta_between(&base, &d)))
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ConditioningChainResult {
+    pub total_delta: DescriptorDelta,
+    pub by_model: Vec<(String, DescriptorDelta)>,
+}
+
+pub fn run_conditioning_chain(
+    models: &[Box<dyn ConditioningModel>],
+    ctx: &ConditioningContext,
+) -> Result<ConditioningChainResult> {
+    let mut out = ConditioningChainResult::default();
+    for m in models {
+        if let Some(delta) = m.infer_delta(ctx)? {
+            out.total_delta.add_inplace(&delta);
+            out.by_model.push((m.name().to_string(), delta));
+        }
+    }
+    Ok(out)
+}
+
+fn delta_between(base: &DescriptorSet, out: &DescriptorSet) -> DescriptorDelta {
+    DescriptorDelta {
+        duration: out.time.duration - base.time.duration,
+        predelay_ms: out.time.predelay_ms - base.time.predelay_ms,
+        t60: out.time.t60 - base.time.t60,
+        edt: out.time.edt - base.time.edt,
+        brightness: out.spectral.brightness - base.spectral.brightness,
+        hf_damping: out.spectral.hf_damping - base.spectral.hf_damping,
+        lf_bloom: out.spectral.lf_bloom - base.spectral.lf_bloom,
+        spectral_tilt: out.spectral.spectral_tilt - base.spectral.spectral_tilt,
+        band_decay_low: out.spectral.band_decay_low - base.spectral.band_decay_low,
+        band_decay_mid: out.spectral.band_decay_mid - base.spectral.band_decay_mid,
+        band_decay_high: out.spectral.band_decay_high - base.spectral.band_decay_high,
+        early_density: out.structural.early_density - base.structural.early_density,
+        late_density: out.structural.late_density - base.structural.late_density,
+        diffusion: out.structural.diffusion - base.structural.diffusion,
+        modal_density: out.structural.modal_density - base.structural.modal_density,
+        tail_noise: out.structural.tail_noise - base.structural.tail_noise,
+        grain: out.structural.grain - base.structural.grain,
+        width: out.spatial.width - base.spatial.width,
+        decorrelation: out.spatial.decorrelation - base.spatial.decorrelation,
+        asymmetry: out.spatial.asymmetry - base.spatial.asymmetry,
+    }
 }

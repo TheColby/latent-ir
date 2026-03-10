@@ -23,6 +23,8 @@ Most reverbs expose fixed presets or static measured spaces. `latent-ir` treats 
 - Built-in preset inspection and retrieval (`preset`)
 - Model fitting utility for lightweight learned encoders (`train-encoder`)
 - Evaluation utility with baseline reports for regression tracking (`eval`)
+- Benchmark lab + CI gating utility (`benchmark`)
+- Model manifest validation utility (`model validate`)
 - Learned text/audio conditioning encoders loaded from JSON model files
 - Deterministic generation via explicit seed
 - JSON metadata + analysis output for reproducibility
@@ -117,6 +119,16 @@ cargo run -- generate \
   --output out/learned_text_ir.wav
 ```
 
+Generate with ONNX text encoder (build with `--features onnx`):
+
+```bash
+cargo run --features onnx -- generate \
+  --prompt "dark steel cathedral" \
+  --text-encoder-onnx models/text_delta.onnx \
+  --text-encoder-onnx-input-dim 256 \
+  --output out/onnx_text_ir.wav
+```
+
 Generate with learned audio encoder from reference material:
 
 ```bash
@@ -124,6 +136,15 @@ cargo run -- generate \
   --reference-audio references/hall_ir.wav \
   --audio-encoder-model examples/models/audio_encoder_v1.json \
   --output out/learned_audio_ir.wav
+```
+
+Generate with ONNX audio encoder (build with `--features onnx`):
+
+```bash
+cargo run --features onnx -- generate \
+  --reference-audio references/hall_ir.wav \
+  --audio-encoder-onnx models/audio_delta.onnx \
+  --output out/onnx_audio_ir.wav
 ```
 
 Generate from preset + overrides:
@@ -180,7 +201,8 @@ cargo run -- preset dark_stone_cathedral --json
 ## Command Reference
 
 - `generate`
-  - Inputs: optional `--prompt`, optional `--preset`, optional learned encoders (`--text-encoder-model`, `--audio-encoder-model`, `--reference-audio`), descriptor overrides (`--duration`, `--t60`, `--predelay-ms`, `--edt`, etc.), channel format, seed
+  - Inputs: optional `--prompt`, optional `--preset`, optional learned encoders (`--text-encoder-model`, `--audio-encoder-model`, `--text-encoder-onnx`, `--audio-encoder-onnx`, `--reference-audio`), descriptor overrides (`--duration`, `--t60`, `--predelay-ms`, `--edt`, etc.), channel format, seed
+  - Perceptual controls: `--macro-size`, `--macro-distance`, `--macro-material`, `--macro-clarity`, `--macro-trajectory`
   - Outputs: generated IR WAV + companion JSON metadata (or custom `--metadata-out`), optional analysis JSON via `--json-analysis-out`
 - `analyze`
   - Inputs: IR WAV
@@ -204,6 +226,11 @@ cargo run -- preset dark_stone_cathedral --json
 - `eval`
   - Modes: `text`, `audio`
   - Outputs: baseline evaluation JSON (`latent-ir.eval.baseline.v1`) with descriptor-space and analysis-space errors
+- `benchmark`
+  - `run`: computes objective/speed/stability/perceptual-proxy metrics and writes `latent-ir.benchmark.v1` report
+  - `check`: compares report vs baseline and fails on configured regression thresholds
+- `model`
+  - `validate`: validates `latent-ir.model-manifest.v1` manifests against runtime capabilities/features
 
 Train text encoder from labeled prompt data:
 
@@ -242,6 +269,32 @@ cargo run -- eval audio \
   --output reports/audio_baseline.json
 ```
 
+Run benchmark suite:
+
+```bash
+cargo run -- benchmark run \
+  --dataset datasets/benchmark_suite.json \
+  --text-model models/text_encoder_v1.json \
+  --audio-model models/audio_encoder_v1.json \
+  --repeats 3 \
+  --output reports/benchmark.json
+```
+
+Gate candidate report vs baseline:
+
+```bash
+cargo run -- benchmark check \
+  --report reports/benchmark_new.json \
+  --baseline reports/benchmark_baseline.json \
+  --max-regression 0.05
+```
+
+Validate model/runtime compatibility:
+
+```bash
+cargo run -- model validate --manifest manifests/text_encoder_manifest.json
+```
+
 ## Limitations and Honesty
 
 - v0 uses procedural DSP and rule-based prompt semantics only.
@@ -254,6 +307,8 @@ cargo run -- eval audio \
 - Generation metadata includes `schema_version: "latent-ir.generation.v1"`.
 - Analysis reports include `schema_version: "latent-ir.analysis.v1"`.
 - Evaluation baseline reports include `schema_version: "latent-ir.eval.baseline.v1"`.
+- Benchmark reports include `schema_version: "latent-ir.benchmark.v1"`.
+- Model manifests use `schema_version: "latent-ir.model-manifest.v1"`.
 - These version tags are intended for machine parsing and forward compatibility as report fields evolve.
 
 ## Hybrid DSP + ML Direction
@@ -283,6 +338,9 @@ See:
 - `docs/architecture.md`
 - `docs/roadmap.md`
 - `docs/learned-encoders.md`
+- `docs/benchmarking.md`
+- `docs/perceptual-controls.md`
+- `docs/model-manifests.md`
 
 ## Contributing
 

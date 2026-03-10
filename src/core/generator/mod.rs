@@ -3,6 +3,7 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use crate::core::descriptors::DescriptorSet;
+use crate::core::perceptual::MacroTrajectory;
 
 #[derive(Debug, Clone)]
 pub struct GeneratedIr {
@@ -115,4 +116,56 @@ fn normalize(channels: &mut [Vec<f32>]) {
             *s *= gain;
         }
     }
+}
+
+pub fn generate_with_macro_trajectory(
+    generator: &ProceduralIrGenerator,
+    base: &DescriptorSet,
+    trajectory: &MacroTrajectory,
+    seed: u64,
+) -> Result<GeneratedIr> {
+    let segments = 8usize;
+    let mut sum: Option<Vec<Vec<f32>>> = None;
+    let mut weight_sum: Option<Vec<f32>> = None;
+
+    for s in 0..segments {
+        let t = (s as f32 + 0.5) / segments as f32;
+        let mut d = base.clone();
+        trajectory.sample(t).apply_to(&mut d);
+        let part = generator.generate(&d, seed.wrapping_add((s * 7919) as u64))?;
+
+        let n = part.channels.first().map(Vec::len).unwrap_or(0);
+        let channels = part.channels.len();
+        if sum.is_none() {
+            sum = Some(vec![vec![0.0f32; n]; channels]);
+            weight_sum = Some(vec![0.0f32; n]);
+        }
+        let sum_ref = sum.as_mut().expect("sum must exist");
+        let w_ref = weight_sum.as_mut().expect("weights must exist");
+        let target_n = w_ref.len();
+
+        let center = (t * target_n as f32) as isize;
+        let spread = (target_n as f32 / segments as f32).max(1.0);
+        for i in 0..target_n {
+            let dx = (i as isize - center) as f32 / spread;
+            let w = (-0.5 * dx * dx).exp();
+            w_ref[i] += w;
+            for ch in 0..channels {
+                let v = part.channels[ch].get(i).copied().unwrap_or(0.0);
+                sum_ref[ch][i] += v * w;
+            }
+        }
+    }
+
+    let mut out = sum.unwrap_or_else(|| vec![vec![]]);
+    if let Some(w_ref) = weight_sum {
+        for (i, &w) in w_ref.iter().enumerate() {
+            let wn = if w <= 1e-9 { 1.0 } else { w };
+            for ch in &mut out {
+                ch[i] /= wn;
+            }
+        }
+    }
+    normalize(&mut out);
+    Ok(GeneratedIr { channels: out })
 }

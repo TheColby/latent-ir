@@ -1,3 +1,5 @@
+#[cfg(not(feature = "onnx"))]
+use latent_ir::core::conditioning::infer_delta_from_text_onnx;
 use latent_ir::core::conditioning::{
     AudioEncoder, LearnedAudioEncoder, LearnedTextEncoder, TextEncoder,
 };
@@ -39,4 +41,18 @@ fn learned_audio_encoder_produces_nonzero_delta() {
     let before = d.spectral.brightness;
     delta.apply_to(&mut d, 1.0);
     assert!(d.spectral.brightness != before);
+}
+
+#[test]
+fn onnx_requires_feature_flag_when_disabled() {
+    #[cfg(not(feature = "onnx"))]
+    {
+        let err = infer_delta_from_text_onnx(
+            std::path::Path::new("examples/models/does_not_matter.onnx"),
+            "dark cathedral",
+            256,
+        )
+        .expect_err("onnx should require feature");
+        assert!(format!("{err}").contains("features onnx"));
+    }
 }

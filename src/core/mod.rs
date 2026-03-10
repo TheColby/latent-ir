@@ -1,9 +1,12 @@
 pub mod analysis;
+pub mod benchmark;
 pub mod conditioning;
 pub mod descriptors;
 pub mod eval;
 pub mod generator;
+pub mod model;
 pub mod morph;
+pub mod perceptual;
 pub mod presets;
 pub mod render;
 pub mod semantics;

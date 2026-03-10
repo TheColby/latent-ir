@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::core::analysis::AnalysisReport;
 use crate::core::conditioning::DescriptorDelta;
 use crate::core::descriptors::DescriptorSet;
+use crate::core::perceptual::MacroControls;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenerationMetadata {
@@ -27,10 +28,14 @@ pub struct GenerationMetadata {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ConditioningTrace {
     pub text_encoder_model: Option<String>,
+    pub text_encoder_onnx: Option<String>,
     pub audio_encoder_model: Option<String>,
+    pub audio_encoder_onnx: Option<String>,
     pub reference_audio: Option<String>,
     pub text_delta: Option<DescriptorDelta>,
     pub audio_delta: Option<DescriptorDelta>,
+    pub macro_controls: Option<MacroControls>,
+    pub macro_trajectory: Option<String>,
 }
 
 pub fn companion_json_path(audio_path: &Path) -> PathBuf {

@@ -1,6 +1,6 @@
 # latent-ir Roadmap
 
-## v0.1 - Foundation (current scaffold)
+## v0.1 - Foundation (completed)
 
 - Stable CLI with subcommands: `generate`, `analyze`, `morph`, `render`, `sample`, `preset`
 - Canonical descriptor model and preset system
@@ -9,21 +9,34 @@
 - Offline convolution rendering path
 - Core tests for deterministic behavior and pipeline sanity
 
-## v0.2 - Better Acoustics + Data Model
+## v0.2 - Better Acoustics + Data Model (mostly completed)
 
 - Improved early-reflection statistical models
 - Better band decay estimation and robustness checks
 - Reference-audio descriptor extraction (non-learned baseline)
 - IR metadata schema versioning
 - Batch generation/analyze modes and richer machine-readable outputs
+- Learned JSON text/audio encoders
+- Optional ONNX inference backend (feature-gated)
+- `train-encoder` and `eval` command workflows
+- Benchmark lab with CI-friendly `benchmark check`
+- Perceptual macro controls + trajectory automation
+- FFT-partitioned render engine with direct-path reference tests
 
-## v0.3 - Hybrid Conditioning Interfaces
+## v0.3 - Hybrid Conditioning Interfaces (in progress)
 
 - Explicit conditioning traits for pluggable learned modules
 - Optional text encoder integration behind feature flags
 - Optional reference-audio embedding adapter
 - Descriptor constraint projection and confidence tracking
 - Morphing upgrades (envelope-aware + descriptor-space coupling)
+- Model manifest schema + runtime compatibility validation (`model validate`)
+
+Remaining for v0.3:
+
+- Latent-space descriptor priors and constrained projection APIs
+- Confidence calibration/uncertainty reporting in conditioning chain
+- Descriptor trajectory-conditioned morphing coupling
 
 ## v1.0 - Research/Product Grade Toolkit
 
@@ -32,3 +45,9 @@
 - Stronger acoustic metric suite and validation harness
 - Plugin-ready library APIs (while staying CLI-first)
 - End-to-end docs for hybrid DSP + ML model development and evaluation
+
+## Next Milestone Focus
+
+1. Latent-ready conditioning contracts (`LatentVector` + projection interfaces)
+2. Benchmark/eval baseline suites in CI for mandatory regression gates
+3. Partitioned convolution streaming mode for long-form offline rendering

@@ -1,0 +1,32 @@
+{
+  "schema_version": "latent-ir.macro-trajectory.v1",
+  "keyframes": [
+    {
+      "t": 0.0,
+      "controls": {
+        "size": -0.2,
+        "distance": 0.0,
+        "material": -0.1,
+        "clarity": 0.4
+      }
+    },
+    {
+      "t": 0.5,
+      "controls": {
+        "size": 0.4,
+        "distance": 0.2,
+        "material": 0.1,
+        "clarity": 0.0
+      }
+    },
+    {
+      "t": 1.0,
+      "controls": {
+        "size": 0.9,
+        "distance": 0.5,
+        "material": 0.3,
+        "clarity": -0.2
+      }
+    }
+  ]
+}

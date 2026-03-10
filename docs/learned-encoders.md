@@ -7,6 +7,8 @@
 
 These are intentionally lightweight and fully inspectable for v0.1.
 
+The project also supports ONNX inference backends behind the cargo feature flag `onnx`.
+
 ## Text Encoder
 
 Model fields:
@@ -60,6 +62,20 @@ Inference flow:
 - These are learned weight paths, not large foundation models.
 - Models are deterministic and file-driven.
 - The CLI still supports rule-based semantics and explicit overrides; those remain first-class and composable.
+
+## ONNX Inference
+
+Enable with:
+
+```bash
+cargo run --features onnx -- generate ...
+```
+
+ONNX assumptions in current scaffold:
+
+- text ONNX model input: single `[1, input_dim]` hashed token feature vector
+- audio ONNX model input: single `[1, 10]` engineered audio feature vector
+- output: at least 20 floats mapping to descriptor deltas in canonical field order
 
 ## Training Utility
 

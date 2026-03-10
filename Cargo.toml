@@ -6,6 +6,10 @@ description = "Generative impulse responses and acoustic spaces for the command 
 license = "MIT"
 repository = "https://github.com/your-org/latent-ir"
 
+[features]
+default = []
+onnx = ["dep:tract-onnx"]
+
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
@@ -18,6 +22,7 @@ chrono = { version = "0.4", features = ["serde", "clock"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 rustfft = "6.2"
+tract-onnx = { version = "0.22", optional = true }
 
 [dev-dependencies]
 approx = "0.5"
