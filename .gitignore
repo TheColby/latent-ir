@@ -1,0 +1,5 @@
+/target
+*.wav
+*.json
+!examples/*.json
+.DS_Store
