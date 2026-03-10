@@ -25,6 +25,7 @@ Most reverbs expose fixed presets or static measured spaces. `latent-ir` treats 
 - Evaluation utility with baseline reports for regression tracking (`eval`)
 - Benchmark lab + CI gating utility (`benchmark`)
 - Model manifest validation utility (`model validate`)
+- One-shot industrial-vs-baseline comparison utility (`ab-test`)
 - Learned text/audio conditioning encoders loaded from JSON model files
 - Deterministic generation via explicit seed
 - JSON metadata + analysis output for reproducibility
@@ -204,6 +205,7 @@ cargo run -- preset dark_stone_cathedral --json
   - Inputs: optional `--prompt`, optional `--preset`, optional learned encoders (`--text-encoder-model`, `--audio-encoder-model`, `--text-encoder-onnx`, `--audio-encoder-onnx`, `--reference-audio`), descriptor overrides (`--duration`, `--t60`, `--predelay-ms`, `--edt`, etc.), channel format, seed
   - Perceptual controls: `--macro-size`, `--macro-distance`, `--macro-material`, `--macro-clarity`, `--macro-trajectory`
   - Outputs: generated IR WAV + companion JSON metadata (or custom `--metadata-out`), optional analysis JSON via `--json-analysis-out`
+  - Console: prints detailed IR/reverb metrics for every generation run (length, EDT/T20/T30/T60, predelay, spectral, energy split, stereo correlation)
 - `analyze`
   - Inputs: IR WAV
   - Outputs: console metrics or JSON analysis report
@@ -231,6 +233,9 @@ cargo run -- preset dark_stone_cathedral --json
   - `check`: compares report vs baseline and fails on configured regression thresholds
 - `model`
   - `validate`: validates `latent-ir.model-manifest.v1` manifests against runtime capabilities/features
+- `ab-test`
+  - Runs paired generation + analysis for industrial-model vs baseline and writes `latent-ir.ab-test.v1` report with deltas
+  - Optional `--markdown` writes `ab_test_report.md` scorecard
 
 Train text encoder from labeled prompt data:
 
@@ -295,6 +300,20 @@ Validate model/runtime compatibility:
 cargo run -- model validate --manifest manifests/text_encoder_manifest.json
 ```
 
+Run one-shot industrial-vs-baseline A/B test:
+
+```bash
+cargo run -- ab-test \
+  --prompt "massive, colossal grain silo made of 3 ft poured concrete, with an RT60 of around 27 seconds" \
+  --industrial-text-model models/text_encoder_industrial_v1.json \
+  --t60 27 \
+  --macro-size 1.0 \
+  --macro-distance 0.8 \
+  --macro-material -0.2 \
+  --markdown \
+  --output-dir out/ab_silo
+```
+
 ## Limitations and Honesty
 
 - v0 uses procedural DSP and rule-based prompt semantics only.
@@ -309,6 +328,7 @@ cargo run -- model validate --manifest manifests/text_encoder_manifest.json
 - Evaluation baseline reports include `schema_version: "latent-ir.eval.baseline.v1"`.
 - Benchmark reports include `schema_version: "latent-ir.benchmark.v1"`.
 - Model manifests use `schema_version: "latent-ir.model-manifest.v1"`.
+- A/B reports include `schema_version: "latent-ir.ab-test.v1"`.
 - These version tags are intended for machine parsing and forward compatibility as report fields evolve.
 
 ## Hybrid DSP + ML Direction
@@ -379,7 +399,7 @@ Built-in presets:
 
 ## Attribution
 
-`latent-ir` is developed by the open-source contributor community.
+`latent-ir` is developed by Colby Leider and the open-source contributor community.
 
 If you use this project in research, products, demos, or educational material, attribution to the `latent-ir` project and repository is appreciated.
 

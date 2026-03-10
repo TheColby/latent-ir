@@ -2,6 +2,7 @@ use anyhow::Result;
 
 use crate::cli::{Cli, Commands};
 
+mod ab_test;
 mod analyze;
 mod benchmark;
 mod eval;
@@ -25,5 +26,6 @@ pub fn dispatch(cli: Cli) -> Result<()> {
         Commands::Eval(args) => eval::run(args),
         Commands::Benchmark(args) => benchmark::run(args),
         Commands::Model(args) => model::run(args),
+        Commands::AbTest(args) => ab_test::run(args),
     }
 }

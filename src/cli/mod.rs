@@ -31,6 +31,8 @@ pub enum Commands {
     Benchmark(BenchmarkArgs),
     /// Validate model manifests and runtime compatibility.
     Model(ModelArgs),
+    /// Run one-shot A/B generation + analysis (industrial model vs baseline).
+    AbTest(AbTestArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -402,6 +404,55 @@ pub struct ModelValidateArgs {
     /// Model manifest JSON path.
     #[arg(long)]
     pub manifest: PathBuf,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct AbTestArgs {
+    /// Prompt used for both A and B runs.
+    #[arg(long)]
+    pub prompt: String,
+    /// Industrial text encoder model used for variant A.
+    #[arg(long)]
+    pub industrial_text_model: PathBuf,
+    /// Directory for A/B artifacts and report.
+    #[arg(long)]
+    pub output_dir: PathBuf,
+    /// Optional explicit t60 override.
+    #[arg(long)]
+    pub t60: Option<f32>,
+    /// Optional duration override.
+    #[arg(long)]
+    pub duration: Option<f32>,
+    /// Optional predelay override.
+    #[arg(long)]
+    pub predelay_ms: Option<f32>,
+    /// Optional EDT override.
+    #[arg(long)]
+    pub edt: Option<f32>,
+    /// Optional preset name.
+    #[arg(long)]
+    pub preset: Option<String>,
+    /// Sample rate for both runs.
+    #[arg(long, default_value_t = 48_000)]
+    pub sample_rate: u32,
+    /// Seed for deterministic comparison.
+    #[arg(long, default_value_t = 1337)]
+    pub seed: u64,
+    #[arg(long)]
+    pub macro_size: Option<f32>,
+    #[arg(long)]
+    pub macro_distance: Option<f32>,
+    #[arg(long)]
+    pub macro_material: Option<f32>,
+    #[arg(long)]
+    pub macro_clarity: Option<f32>,
+    #[arg(long)]
+    pub macro_trajectory: Option<PathBuf>,
+    #[arg(long, value_enum, default_value_t = ChannelFormatArg::Stereo)]
+    pub channels: ChannelFormatArg,
+    /// Write a markdown scorecard (`ab_test_report.md`) in output directory.
+    #[arg(long)]
+    pub markdown: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]

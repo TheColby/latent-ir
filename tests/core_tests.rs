@@ -24,6 +24,28 @@ fn semantics_adjusts_descriptors() {
 }
 
 #[test]
+fn semantics_extracts_rt60_from_prompt() {
+    let mut d = DescriptorSet::default();
+    SemanticResolver::default().apply_prompt(
+        "massive concrete silo with an rt60 of around 27 seconds",
+        &mut d,
+    );
+    assert!((d.time.t60 - 27.0).abs() < 0.5);
+}
+
+#[test]
+fn semantics_parses_concrete_thickness() {
+    let mut thin = DescriptorSet::default();
+    SemanticResolver::default().apply_prompt("concrete bunker 0.5 ft wall", &mut thin);
+
+    let mut thick = DescriptorSet::default();
+    SemanticResolver::default().apply_prompt("concrete bunker 3 ft poured concrete", &mut thick);
+
+    assert!(thick.spectral.hf_damping > thin.spectral.hf_damping);
+    assert!(thick.structural.modal_density > thin.structural.modal_density);
+}
+
+#[test]
 fn deterministic_generation_by_seed() {
     let d = DescriptorSet::default();
     let g = ProceduralIrGenerator::new(48_000);

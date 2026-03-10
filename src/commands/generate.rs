@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use chrono::Utc;
 
 use crate::cli::{ChannelFormatArg, GenerateArgs};
-use crate::core::analysis::IrAnalyzer;
+use crate::core::analysis::{AnalysisReport, IrAnalyzer};
 use crate::core::conditioning::{
     run_conditioning_chain, ConditioningContext, ConditioningModel, JsonAudioConditioningModel,
     JsonTextConditioningModel, LearnedAudioEncoder, LearnedTextEncoder, OnnxAudioConditioningModel,
@@ -187,7 +187,48 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         println!("wrote analysis: {}", analysis_path.display());
     }
 
+    print_generation_metrics(&metadata.analysis);
     println!("wrote IR: {}", args.output.display());
     println!("wrote metadata: {}", metadata_path.display());
     Ok(())
+}
+
+fn print_generation_metrics(r: &AnalysisReport) {
+    println!("--- generated IR metrics ---");
+    println!("sample_rate_hz: {}", r.sample_rate);
+    println!("channels: {}", r.channels);
+    println!("ir_length_s: {:.4}", r.duration_s);
+    println!("peak: {:.6}", r.peak);
+    println!("rms: {:.6}", r.rms);
+    println!("predelay_ms_est: {:.3}", r.predelay_ms_est);
+    println!("edt_s_est: {:.4}", r.edt_s_est.unwrap_or(-1.0));
+    println!("t20_s_est: {:.4}", r.t20_s_est.unwrap_or(-1.0));
+    println!("t30_s_est: {:.4}", r.t30_s_est.unwrap_or(-1.0));
+    println!("t60_s_est: {:.4}", r.t60_s_est.unwrap_or(-1.0));
+    println!("spectral_centroid_hz: {:.2}", r.spectral_centroid_hz);
+    println!(
+        "band_decay_low_s: {:.4}",
+        r.band_decay_low_s.unwrap_or(-1.0)
+    );
+    println!(
+        "band_decay_mid_s: {:.4}",
+        r.band_decay_mid_s.unwrap_or(-1.0)
+    );
+    println!(
+        "band_decay_high_s: {:.4}",
+        r.band_decay_high_s.unwrap_or(-1.0)
+    );
+    println!("early_energy_ratio: {:.5}", r.early_energy_ratio);
+    println!("late_energy_ratio: {:.5}", r.late_energy_ratio);
+    println!(
+        "stereo_correlation: {:.5}",
+        r.stereo_correlation.unwrap_or(1.0)
+    );
+    if !r.warnings.is_empty() {
+        println!("warnings:");
+        for w in &r.warnings {
+            println!("  - {}", w);
+        }
+    }
+    println!("----------------------------");
 }

@@ -112,6 +112,24 @@ JSON array:
 
 Audio paths are resolved relative to the dataset file when not absolute.
 
+### Industrial text-conditioning starter dataset
+
+This repo includes:
+
+- `examples/datasets/text_pairs_industrial.json`
+
+It focuses on industrial structures/materials (silos, bunkers, cisterns, hangars, corrugated steel, poured concrete).
+
+Train from it with:
+
+```bash
+cargo run -- train-encoder text \
+  --dataset examples/datasets/text_pairs_industrial.json \
+  --output models/text_encoder_industrial_v1.json \
+  --max-vocab 512 \
+  --epochs 1200
+```
+
 ## Evaluation Utility
 
 Use `eval text` or `eval audio` to generate baseline reports for held-out sets.
