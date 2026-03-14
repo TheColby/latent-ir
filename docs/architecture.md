@@ -131,6 +131,12 @@ Generation metadata includes:
 
 `generate --explain-conditioning` provides an interactive console view of this conditioning state.
 
+Channel-format selection precedence during generation:
+1. explicit `--channels` override
+2. custom layout intent from `--layout-json`
+3. prompt/preset conditioning hints
+4. descriptor defaults
+
 ## Extension Points
 
 Planned near-term expansion:

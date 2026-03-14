@@ -197,6 +197,7 @@ Metadata includes:
 - `generate`
   - supports prompt/preset/overrides/learned models/custom layout/geometry control
   - validates and reports descriptor corrections
+  - if `--channels` is omitted, prompt/preset channel-format intent can resolve output format
   - `--explain-conditioning` prints resolved conditioning deltas and descriptor snapshot
 - `analyze`
   - prints metrics, confidence estimates, and warnings; supports JSON output

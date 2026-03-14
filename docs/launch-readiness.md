@@ -41,7 +41,7 @@ This document is a practical pre-launch checklist for public announcements.
 - Use `generate --explain-conditioning` and include metadata deltas in release artifacts.
 - Mention whether semantic rules, learned text model, and/or learned audio model were active.
 
-8. PATH/install issues?
+9. PATH/install issues?
 - Use `./scripts/install_local.sh`.
 - Ensure `$HOME/.cargo/bin` (or custom `$CARGO_HOME/bin`) is on `PATH`.
 

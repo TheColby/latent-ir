@@ -516,6 +516,43 @@ fn generate_prompt_channel_hint_applies_when_no_channels_override() {
 }
 
 #[test]
+fn generate_rejects_layout_json_with_explicit_non_custom_channels() {
+    let dir = tempdir().expect("tempdir");
+    let ir_path = dir.path().join("bad_layout_override.wav");
+    let layout_path = dir.path().join("layout.json");
+
+    let layout = r#"{
+  "schema_version": "latent-ir.layout.v1",
+  "layout_name": "bad_override_layout",
+  "spatial_encoding": "discrete",
+  "channels": [
+    {"label":"L","azimuth_deg":30,"elevation_deg":0},
+    {"label":"R","azimuth_deg":-30,"elevation_deg":0}
+  ]
+}"#;
+    std::fs::write(&layout_path, layout).expect("write layout");
+
+    let cli = Cli::try_parse_from([
+        "latent-ir",
+        "generate",
+        "--prompt",
+        "layout override check",
+        "--channels",
+        "stereo",
+        "--layout-json",
+        layout_path.to_str().expect("utf8"),
+        "--output",
+        ir_path.to_str().expect("utf8"),
+    ])
+    .expect("parse");
+
+    let err = dispatch(cli).expect_err("layout-json with non-custom channels should fail");
+    assert!(err
+        .to_string()
+        .contains("--layout-json is only valid with --channels custom"));
+}
+
+#[test]
 fn generate_auto_extends_duration_for_long_t60() {
     let dir = tempdir().expect("tempdir");
     let ir_path = dir.path().join("long_tail.wav");
