@@ -23,6 +23,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 rustfft = "6.2"
 tract-onnx = { version = "0.22", optional = true }
+sha2 = "0.10"
 
 [dev-dependencies]
 approx = "0.5"

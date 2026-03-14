@@ -4,7 +4,7 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
-use crate::cli::{AbTestArgs, GenerateArgs};
+use crate::cli::{AbTestArgs, GenerateArgs, QualityProfileArg};
 use crate::core::analysis::AnalysisReport;
 use crate::core::util;
 
@@ -195,6 +195,8 @@ fn build_generate_args(
         sample_rate: args.sample_rate,
         seed: args.seed,
         allow_tail_truncation: false,
+        quality_gate: false,
+        quality_profile: QualityProfileArg::Launch,
         duration: args.duration,
         t60: args.t60,
         predelay_ms: args.predelay_ms,

@@ -16,6 +16,7 @@ This document is a practical pre-launch checklist for public announcements.
 - Present them as deterministic engineering estimates.
 - Do not market them as certified architectural acoustics metrology.
 - Include confidence context (`decay_db_span`, `t60_confidence`, `edt_confidence`) when sharing metrics publicly.
+- Include tail diagnostics (`tail_reaches_minus60db_s`, `tail_margin_to_end_s`) to show truncation risk explicitly.
 
 4. What spatial formats are truly supported?
 - Built-ins: `mono`, `stereo`, `foa`, `5.1`, `7.1`, `7.1.4`, `7.2.4`.
@@ -41,6 +42,15 @@ This document is a practical pre-launch checklist for public announcements.
 - Use `generate --explain-conditioning` and include metadata deltas in release artifacts.
 - Mention whether semantic rules, learned text model, and/or learned audio model were active.
 
+9. How do we enforce quality in CI/release?
+- Use `analyze --quality-gate --quality-profile launch` (or `strict`).
+- Use `generate --quality-gate ...` when producing publishable artifacts.
+- Treat non-zero exit as release-blocking.
+
+10. Can we verify artifacts weren’t silently changed?
+- Compare metadata fingerprints: `ir_sha256`, `descriptor_sha256`, `channel_map_sha256`.
+- Include these in release notes or demo-pack manifests.
+
 9. PATH/install issues?
 - Use `./scripts/install_local.sh`.
 - Ensure `$HOME/.cargo/bin` (or custom `$CARGO_HOME/bin`) is on `PATH`.
@@ -52,6 +62,8 @@ This document is a practical pre-launch checklist for public announcements.
 - one morph example
 - one render A/B clip per IR (same dry source)
 - exact command lines used
+- quality-gate profile + pass/fail output
+- metadata fingerprint values for each published artifact
 
 ## Suggested Scope-Honesty Blurb
 

@@ -19,6 +19,9 @@ pub struct AnalysisReport {
     pub decay_db_span: f32,
     pub t60_confidence: Option<f32>,
     pub edt_confidence: Option<f32>,
+    pub crest_factor_db: f32,
+    pub tail_reaches_minus60db_s: Option<f32>,
+    pub tail_margin_to_end_s: Option<f32>,
     pub spectral_centroid_hz: f32,
     pub band_decay_low_s: Option<f32>,
     pub band_decay_mid_s: Option<f32>,
@@ -43,6 +46,21 @@ pub struct AnalysisReport {
     pub height_energy_ratio: Option<f32>,
     pub lfe_energy_ratio: Option<f32>,
     pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum QualityProfile {
+    Lenient,
+    Launch,
+    Strict,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QualityGateResult {
+    pub profile: QualityProfile,
+    pub passed: bool,
+    pub failed_checks: Vec<String>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -71,10 +89,13 @@ impl IrAnalyzer {
         } else {
             (mono.iter().map(|x| x * x).sum::<f32>() / mono.len() as f32).sqrt()
         };
+        let crest_factor_db = estimate_crest_factor_db(peak, rms);
 
         let predelay_ms_est = estimate_predelay_ms(&mono, sample_rate);
         let (edt, t20, t30, t60) = estimate_decay_times(&mono, sample_rate);
         let decay_db_span = estimate_decay_span_db(&mono);
+        let tail_reaches_minus60db_s = estimate_decay_crossing_time_s(&mono, sample_rate, -60.0);
+        let tail_margin_to_end_s = tail_reaches_minus60db_s.map(|t| duration_s - t);
         let t60_confidence = t60.map(|_| estimate_t60_confidence(decay_db_span, t20, t30, edt));
         let edt_confidence = edt.map(|_| estimate_edt_confidence(decay_db_span));
 
@@ -91,6 +112,18 @@ impl IrAnalyzer {
             if conf < 0.35 {
                 warnings.push(format!(
                     "EDT estimate is low-confidence (confidence={conf:.2}, decay_span_db={decay_db_span:.1})"
+                ));
+            }
+        }
+        if tail_reaches_minus60db_s.is_none() {
+            warnings.push(
+                "IR does not reach -60 dB before file end; long-tail metrics may be optimistic"
+                    .to_string(),
+            );
+        } else if let Some(margin_s) = tail_margin_to_end_s {
+            if margin_s < 0.20 {
+                warnings.push(format!(
+                    "tail margin to file end is small ({margin_s:.3}s); consider longer duration to avoid abrupt truncation"
                 ));
             }
         }
@@ -175,6 +208,9 @@ impl IrAnalyzer {
             decay_db_span,
             t60_confidence,
             edt_confidence,
+            crest_factor_db,
+            tail_reaches_minus60db_s,
+            tail_margin_to_end_s,
             spectral_centroid_hz,
             band_decay_low_s: low,
             band_decay_mid_s: mid,
@@ -233,6 +269,129 @@ fn estimate_t60_confidence(
         c += 0.04;
     }
     c.clamp(0.0, 1.0)
+}
+
+fn estimate_crest_factor_db(peak: f32, rms: f32) -> f32 {
+    if peak <= 1e-9 || rms <= 1e-9 {
+        0.0
+    } else {
+        20.0 * (peak / rms).log10()
+    }
+}
+
+fn estimate_decay_crossing_time_s(ir: &[f32], sr: u32, threshold_db: f32) -> Option<f32> {
+    if ir.is_empty() {
+        return None;
+    }
+    let edc = schroeder_db(ir);
+    let idx = edc.iter().position(|&db| db <= threshold_db)?;
+    Some(idx as f32 / sr as f32)
+}
+
+pub fn evaluate_quality_gate(
+    report: &AnalysisReport,
+    profile: QualityProfile,
+) -> QualityGateResult {
+    let cfg = QualityThresholds::for_profile(profile);
+    let mut failed = Vec::new();
+
+    if report.decay_db_span < cfg.min_decay_db_span {
+        failed.push(format!(
+            "decay_db_span {:.2} < {:.2}",
+            report.decay_db_span, cfg.min_decay_db_span
+        ));
+    }
+
+    match report.t60_confidence {
+        Some(conf) if conf < cfg.min_t60_confidence => failed.push(format!(
+            "t60_confidence {:.3} < {:.3}",
+            conf, cfg.min_t60_confidence
+        )),
+        None => failed.push("t60_confidence unavailable".to_string()),
+        _ => {}
+    }
+
+    if report.peak > cfg.max_peak {
+        failed.push(format!("peak {:.5} > {:.5}", report.peak, cfg.max_peak));
+    }
+
+    match report.tail_margin_to_end_s {
+        Some(margin) if margin < cfg.min_tail_margin_to_end_s => failed.push(format!(
+            "tail_margin_to_end_s {:.3} < {:.3}",
+            margin, cfg.min_tail_margin_to_end_s
+        )),
+        None => failed.push("tail_margin_to_end_s unavailable".to_string()),
+        _ => {}
+    }
+
+    if report.channels > 1 {
+        if let Some(max_mean_abs_corr) = cfg.max_inter_channel_corr_mean_abs {
+            if let Some(v) = report.inter_channel_correlation_mean_abs {
+                if v > max_mean_abs_corr {
+                    failed.push(format!(
+                        "inter_channel_corr_mean_abs {:.4} > {:.4}",
+                        v, max_mean_abs_corr
+                    ));
+                }
+            }
+        }
+    }
+
+    if cfg.fail_on_analysis_warning {
+        failed.extend(
+            report
+                .warnings
+                .iter()
+                .map(|w| format!("analysis_warning: {w}")),
+        );
+    }
+
+    QualityGateResult {
+        profile,
+        passed: failed.is_empty(),
+        failed_checks: failed,
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct QualityThresholds {
+    min_decay_db_span: f32,
+    min_t60_confidence: f32,
+    max_peak: f32,
+    min_tail_margin_to_end_s: f32,
+    max_inter_channel_corr_mean_abs: Option<f32>,
+    fail_on_analysis_warning: bool,
+}
+
+impl QualityThresholds {
+    fn for_profile(profile: QualityProfile) -> Self {
+        match profile {
+            QualityProfile::Lenient => Self {
+                min_decay_db_span: 14.0,
+                min_t60_confidence: 0.20,
+                max_peak: 1.0,
+                min_tail_margin_to_end_s: 0.05,
+                max_inter_channel_corr_mean_abs: Some(0.995),
+                fail_on_analysis_warning: false,
+            },
+            QualityProfile::Launch => Self {
+                min_decay_db_span: 20.0,
+                min_t60_confidence: 0.35,
+                max_peak: 0.99,
+                min_tail_margin_to_end_s: 0.20,
+                max_inter_channel_corr_mean_abs: Some(0.985),
+                fail_on_analysis_warning: false,
+            },
+            QualityProfile::Strict => Self {
+                min_decay_db_span: 30.0,
+                min_t60_confidence: 0.55,
+                max_peak: 0.95,
+                min_tail_margin_to_end_s: 0.40,
+                max_inter_channel_corr_mean_abs: Some(0.97),
+                fail_on_analysis_warning: true,
+            },
+        }
+    }
 }
 
 fn directional_energy_ratios(

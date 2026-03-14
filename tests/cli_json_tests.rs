@@ -44,6 +44,9 @@ fn generate_writes_metadata_and_analysis_json() {
     assert!(meta["descriptor"].is_object());
     assert!(meta["analysis"].is_object());
     assert!(meta["conditioning"]["combined_delta"].is_object());
+    assert!(meta["ir_sha256"].as_str().unwrap_or("").len() >= 64);
+    assert!(meta["descriptor_sha256"].as_str().unwrap_or("").len() >= 64);
+    assert!(meta["channel_map_sha256"].as_str().unwrap_or("").len() >= 64);
 
     let analysis_text =
         std::fs::read_to_string(&analysis_path).expect("analysis json should exist");
@@ -735,4 +738,77 @@ fn generate_rejects_out_of_range_sample_rate() {
 
     let err = dispatch(cli).expect_err("out of range sample rate should fail");
     assert!(err.to_string().contains("supported range"));
+}
+
+#[test]
+fn generate_quality_gate_lenient_passes_and_metadata_captures_gate() {
+    let dir = tempdir().expect("tempdir");
+    let ir_path = dir.path().join("gate_pass.wav");
+    let meta_path = dir.path().join("gate_pass.meta.json");
+
+    let cli = Cli::try_parse_from([
+        "latent-ir",
+        "generate",
+        "--prompt",
+        "short plate",
+        "--duration",
+        "1.0",
+        "--t60",
+        "0.7",
+        "--quality-gate",
+        "--quality-profile",
+        "lenient",
+        "--output",
+        ir_path.to_str().expect("utf8"),
+        "--metadata-out",
+        meta_path.to_str().expect("utf8"),
+    ])
+    .expect("parse");
+
+    dispatch(cli).expect("lenient quality gate should pass");
+
+    let meta: Value = serde_json::from_str(&std::fs::read_to_string(&meta_path).unwrap()).unwrap();
+    assert_eq!(meta["quality_gate_profile"], "lenient");
+    assert_eq!(meta["quality_gate_passed"], true);
+    assert!(meta["quality_gate_failed_checks"].is_array());
+}
+
+#[test]
+fn analyze_quality_gate_can_fail_and_still_write_json() {
+    let dir = tempdir().expect("tempdir");
+    let ir_path = dir.path().join("gate_fail.wav");
+    let analysis_path = dir.path().join("gate_fail.analysis.json");
+
+    let gen = Cli::try_parse_from([
+        "latent-ir",
+        "generate",
+        "--prompt",
+        "huge tunnel",
+        "--duration",
+        "0.25",
+        "--t60",
+        "8.0",
+        "--allow-tail-truncation",
+        "--output",
+        ir_path.to_str().expect("utf8"),
+    ])
+    .expect("parse");
+    dispatch(gen).expect("generate should succeed");
+
+    let analyze = Cli::try_parse_from([
+        "latent-ir",
+        "analyze",
+        ir_path.to_str().expect("utf8"),
+        "--json",
+        "--output",
+        analysis_path.to_str().expect("utf8"),
+        "--quality-gate",
+        "--quality-profile",
+        "strict",
+    ])
+    .expect("parse");
+
+    let err = dispatch(analyze).expect_err("strict quality gate should fail for truncated IR");
+    assert!(err.to_string().contains("quality gate failed"));
+    assert!(analysis_path.exists());
 }

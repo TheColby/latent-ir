@@ -86,6 +86,7 @@ Analysis is deterministic and workflow-oriented.
 Key outputs include:
 - EDT / T20 / T30 / T60 estimates
 - decay-span and confidence estimates for decay metrics
+- crest-factor summary and tail-reach diagnostics (`-60 dB` crossing + margin to file end)
 - predelay estimate
 - spectral centroid + band decay summaries
 - early/late energy summaries
@@ -127,9 +128,16 @@ Artifacts:
 Generation metadata includes:
 - replay command string
 - conditioning trace (text/audio/combined deltas)
+- reproducibility fingerprints (`ir_sha256`, `descriptor_sha256`, `channel_map_sha256`)
+- optional quality-gate result (`profile`, `passed`, failed checks)
 - warnings and embedded analysis summary
 
 `generate --explain-conditioning` provides an interactive console view of this conditioning state.
+
+Quality gates:
+- available in `generate` and `analyze`
+- profiles: `lenient`, `launch`, `strict`
+- designed for deterministic CI/release checks (non-zero exit on failure)
 
 Channel-format selection precedence during generation:
 1. explicit `--channels` override

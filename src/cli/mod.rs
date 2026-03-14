@@ -99,6 +99,14 @@ pub struct GenerateArgs {
     #[arg(long, default_value_t = false)]
     pub allow_tail_truncation: bool,
 
+    /// Run post-generation quality checks and return non-zero on failure.
+    #[arg(long, default_value_t = false)]
+    pub quality_gate: bool,
+
+    /// Quality profile used by `--quality-gate`.
+    #[arg(long, value_enum, default_value_t = QualityProfileArg::Launch)]
+    pub quality_profile: QualityProfileArg,
+
     #[arg(long)]
     pub duration: Option<f32>,
 
@@ -204,6 +212,14 @@ pub struct AnalyzeArgs {
     /// Optional channel-map JSON path; defaults to companion `.channels.json` when present.
     #[arg(long)]
     pub channel_map: Option<PathBuf>,
+
+    /// Run quality checks and return non-zero on failure.
+    #[arg(long, default_value_t = false)]
+    pub quality_gate: bool,
+
+    /// Quality profile used by `--quality-gate`.
+    #[arg(long, value_enum, default_value_t = QualityProfileArg::Launch)]
+    pub quality_profile: QualityProfileArg,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -586,4 +602,11 @@ pub enum RenderEngineArg {
 pub enum ResampleModeArg {
     Linear,
     Cubic,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum QualityProfileArg {
+    Lenient,
+    Launch,
+    Strict,
 }

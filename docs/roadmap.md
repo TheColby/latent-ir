@@ -42,6 +42,9 @@ Delivered so far:
 - selectable resample modes (`linear` / `cubic`) for reconciliation paths
 - expanded CLI warning surfacing and validation hints
 - analysis confidence metrics and replay-command metadata for reproducibility/transparency
+- analysis tail diagnostics (`tail_reaches_minus60db_s`, `tail_margin_to_end_s`) and crest-factor reporting
+- reproducibility hashes in generation metadata (`ir_sha256`, `descriptor_sha256`, `channel_map_sha256`)
+- quality-gate profiles for `generate`/`analyze` (`lenient`, `launch`, `strict`)
 
 Remaining high-impact items for v0.3:
 

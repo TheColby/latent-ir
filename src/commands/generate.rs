@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 
-use crate::cli::{ChannelFormatArg, GenerateArgs};
-use crate::core::analysis::{AnalysisReport, IrAnalyzer};
+use crate::cli::{ChannelFormatArg, GenerateArgs, QualityProfileArg};
+use crate::core::analysis::{evaluate_quality_gate, AnalysisReport, IrAnalyzer, QualityProfile};
 use crate::core::conditioning::{
     run_conditioning_chain, ConditioningContext, ConditioningModel, DescriptorDelta,
     JsonAudioConditioningModel, JsonTextConditioningModel, LearnedAudioEncoder, LearnedTextEncoder,
@@ -208,7 +208,27 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         Some(&channel_map),
     );
     analysis.warnings.extend(runtime_warnings);
+    let quality_gate_result = if args.quality_gate {
+        Some(evaluate_quality_gate(
+            &analysis,
+            quality_profile_from_arg(args.quality_profile),
+        ))
+    } else {
+        None
+    };
+    if let Some(gate) = quality_gate_result.as_ref() {
+        if !gate.passed {
+            analysis.warnings.push(format!(
+                "quality gate '{}' failed ({} checks)",
+                format!("{:?}", gate.profile).to_lowercase(),
+                gate.failed_checks.len()
+            ));
+        }
+    }
     let channel_labels = descriptor.spatial.resolved_channel_labels();
+    let ir_sha256 = util::hash::sha256_channels_f32(&generated.channels);
+    let descriptor_sha256 = util::hash::sha256_json(&descriptor)?;
+    let channel_map_sha256 = util::hash::sha256_json(&channel_map)?;
 
     let metadata = GenerationMetadata {
         schema_version: "latent-ir.generation.v1".to_string(),
@@ -225,7 +245,17 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         channel_format: channel_map.layout_name.clone(),
         channel_labels,
         channel_map_path: Some(channel_map_path.display().to_string()),
+        ir_sha256,
+        descriptor_sha256,
+        channel_map_sha256,
         descriptor,
+        quality_gate_profile: quality_gate_result
+            .as_ref()
+            .map(|g| format!("{:?}", g.profile).to_lowercase()),
+        quality_gate_passed: quality_gate_result.as_ref().map(|g| g.passed),
+        quality_gate_failed_checks: quality_gate_result
+            .as_ref()
+            .map(|g| g.failed_checks.clone()),
         warnings: analysis.warnings.clone(),
         generated_at_utc: Utc::now(),
         analysis,
@@ -251,6 +281,28 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         &metadata.channel_format,
         &metadata.channel_labels,
     );
+    println!(
+        "{}",
+        util::console::metric("ir_sha256", &metadata.ir_sha256)
+    );
+    println!(
+        "{}",
+        util::console::metric("descriptor_sha256", &metadata.descriptor_sha256)
+    );
+    println!(
+        "{}",
+        util::console::metric("channel_map_sha256", &metadata.channel_map_sha256)
+    );
+    if let Some(gate) = quality_gate_result.as_ref() {
+        print_quality_gate(gate);
+        if !gate.passed {
+            anyhow::bail!(
+                "quality gate failed for profile '{}' ({} checks)",
+                format!("{:?}", gate.profile).to_lowercase(),
+                gate.failed_checks.len()
+            );
+        }
+    }
     println!("wrote IR: {}", args.output.display());
     println!("wrote metadata: {}", metadata_path.display());
     println!("wrote channel map: {}", channel_map_path.display());
@@ -304,6 +356,11 @@ fn build_replay_command(args: &GenerateArgs) -> String {
     parts.push(format!("{}", args.seed));
     if args.allow_tail_truncation {
         parts.push("--allow-tail-truncation".to_string());
+    }
+    if args.quality_gate {
+        parts.push("--quality-gate".to_string());
+        parts.push("--quality-profile".to_string());
+        parts.push(quality_profile_arg_value(args.quality_profile).to_string());
     }
     if let Some(v) = args.layout_json.as_deref() {
         parts.push("--layout-json".to_string());
@@ -580,6 +637,14 @@ fn parse_position_triplet(
     }
 }
 
+fn quality_profile_arg_value(arg: QualityProfileArg) -> &'static str {
+    match arg {
+        QualityProfileArg::Lenient => "lenient",
+        QualityProfileArg::Launch => "launch",
+        QualityProfileArg::Strict => "strict",
+    }
+}
+
 fn print_generation_metrics(r: &AnalysisReport, channel_format: &str, channel_labels: &[String]) {
     println!("{}", util::console::section("--- generated IR metrics ---"));
     println!(
@@ -638,6 +703,21 @@ fn print_generation_metrics(r: &AnalysisReport, channel_format: &str, channel_la
     println!(
         "{}",
         util::console::metric_opt("edt_confidence", fmt_opt(r.edt_confidence, 3))
+    );
+    println!(
+        "{}",
+        util::console::metric("crest_factor_db", format!("{:.2}", r.crest_factor_db))
+    );
+    println!(
+        "{}",
+        util::console::metric_opt(
+            "tail_reaches_minus60db_s",
+            fmt_opt(r.tail_reaches_minus60db_s, 3)
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric_opt("tail_margin_to_end_s", fmt_opt(r.tail_margin_to_end_s, 3))
     );
     println!(
         "{}",
@@ -764,6 +844,30 @@ fn print_generation_metrics(r: &AnalysisReport, channel_format: &str, channel_la
         }
     }
     println!("{}", util::console::section("----------------------------"));
+}
+
+fn print_quality_gate(gate: &crate::core::analysis::QualityGateResult) {
+    println!("{}", util::console::section("--- quality gate ---"));
+    println!(
+        "{}",
+        util::console::metric("profile", format!("{:?}", gate.profile).to_lowercase())
+    );
+    println!("{}", util::console::metric("passed", gate.passed));
+    if !gate.failed_checks.is_empty() {
+        println!("{}", util::console::warning("failed_checks:"));
+        for check in &gate.failed_checks {
+            println!("  {}", util::console::warning(&format!("- {check}")));
+        }
+    }
+    println!("{}", util::console::section("--------------------"));
+}
+
+fn quality_profile_from_arg(arg: QualityProfileArg) -> QualityProfile {
+    match arg {
+        QualityProfileArg::Lenient => QualityProfile::Lenient,
+        QualityProfileArg::Launch => QualityProfile::Launch,
+        QualityProfileArg::Strict => QualityProfile::Strict,
+    }
 }
 
 fn fmt_opt(value: Option<f32>, decimals: usize) -> Option<String> {

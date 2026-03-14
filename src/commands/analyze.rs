@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 
-use crate::cli::AnalyzeArgs;
-use crate::core::analysis::IrAnalyzer;
+use crate::cli::{AnalyzeArgs, QualityProfileArg};
+use crate::core::analysis::{evaluate_quality_gate, IrAnalyzer, QualityProfile};
 use crate::core::spatial;
 use crate::core::util;
 
@@ -117,6 +117,24 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
         );
         println!(
             "{}",
+            util::console::metric("crest_factor_db", format!("{:.2}", report.crest_factor_db))
+        );
+        println!(
+            "{}",
+            util::console::metric_opt(
+                "tail_reaches_minus60db_s",
+                fmt_opt(report.tail_reaches_minus60db_s, 3)
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric_opt(
+                "tail_margin_to_end_s",
+                fmt_opt(report.tail_margin_to_end_s, 3)
+            )
+        );
+        println!(
+            "{}",
             util::console::metric(
                 "spectral_centroid_hz",
                 format!("{:.1}", report.spectral_centroid_hz)
@@ -211,9 +229,43 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
         }
     }
 
+    if args.quality_gate {
+        let gate = evaluate_quality_gate(&report, quality_profile_from_arg(args.quality_profile));
+        if !args.json {
+            println!("{}", util::console::section("--- quality gate ---"));
+            println!(
+                "{}",
+                util::console::metric("profile", format!("{:?}", gate.profile).to_lowercase())
+            );
+            println!("{}", util::console::metric("passed", gate.passed));
+            if !gate.failed_checks.is_empty() {
+                println!("{}", util::console::warning("failed_checks:"));
+                for check in &gate.failed_checks {
+                    println!("  {}", util::console::warning(&format!("- {check}")));
+                }
+            }
+            println!("{}", util::console::section("--------------------"));
+        }
+        if !gate.passed {
+            anyhow::bail!(
+                "quality gate failed for profile '{}' ({} checks)",
+                format!("{:?}", gate.profile).to_lowercase(),
+                gate.failed_checks.len()
+            );
+        }
+    }
+
     Ok(())
 }
 
 fn fmt_opt(value: Option<f32>, decimals: usize) -> Option<String> {
     value.map(|v| format!("{:.*}", decimals, v))
+}
+
+fn quality_profile_from_arg(arg: QualityProfileArg) -> QualityProfile {
+    match arg {
+        QualityProfileArg::Lenient => QualityProfile::Lenient,
+        QualityProfileArg::Launch => QualityProfile::Launch,
+        QualityProfileArg::Strict => QualityProfile::Strict,
+    }
 }

@@ -48,9 +48,12 @@ Most reverb workflows are static: fixed presets, fixed measured IR libraries, or
 - Analysis metrics (console + JSON):
   - EDT / T20 / T30 / T60 engineering estimates
   - decay-span and confidence summaries for decay metrics
+  - tail reach and tail margin diagnostics (`tail_reaches_minus60db_s`, `tail_margin_to_end_s`)
+  - crest factor summary for transient/energy balance context
   - predelay, spectral centroid, low/mid/high decay summaries
   - inter-channel correlation + ITD/IACC-style coherence summaries
   - directional energy summaries with channel map
+- Quality gates for launch/release workflows (`--quality-gate --quality-profile lenient|launch|strict`)
 - Render engines: `direct`, `fft-partitioned`, `fft-streaming`
 - `render` and `morph` optional sample-rate reconciliation via `--auto-resample --resample-mode linear|cubic`
 - Reproducible sidecars: metadata JSON, analysis JSON, channel map JSON
@@ -62,6 +65,8 @@ Most reverb workflows are static: fixed presets, fixed measured IR libraries, or
 - Mixed sample-rate workflows get explicit guidance or optional auto-resampling.
 - Analysis caveats are always printed in console output.
 - Metadata now includes a replay command string and combined conditioning delta.
+- Metadata now includes reproducibility fingerprints (`ir_sha256`, `descriptor_sha256`, `channel_map_sha256`).
+- Optional quality gate can fail fast in CI/release pipelines while still writing analysis artifacts.
 
 ## Installation
 
@@ -122,6 +127,13 @@ Analyze:
 
 ```bash
 cargo run -- analyze out/cathedral_ir.wav --json
+```
+
+Gate analysis quality for release:
+
+```bash
+cargo run -- analyze out/cathedral_ir.wav \
+  --quality-gate --quality-profile launch
 ```
 
 Morph:
@@ -189,6 +201,7 @@ Metadata includes:
 - command/prompt/preset/seed/sample-rate
 - resolved descriptor values
 - conditioning trace
+- reproducibility fingerprints (`ir_sha256`, `descriptor_sha256`, `channel_map_sha256`)
 - warnings
 - embedded analysis summary
 
@@ -199,8 +212,10 @@ Metadata includes:
   - validates and reports descriptor corrections
   - if `--channels` is omitted, prompt/preset channel-format intent can resolve output format
   - `--explain-conditioning` prints resolved conditioning deltas and descriptor snapshot
+  - optional quality gate (`--quality-gate --quality-profile ...`) with pass/fail checks in metadata
 - `analyze`
   - prints metrics, confidence estimates, and warnings; supports JSON output
+  - optional quality gate (`--quality-gate --quality-profile ...`) for release validation
 - `morph`
   - supports `--auto-resample --resample-mode linear|cubic` when IR sample rates differ
 - `render`
@@ -211,17 +226,17 @@ Metadata includes:
 1. “Prompt interpretation is too vague.”
 - Numeric prompt parsing now handles explicit RT60, predelay, duration, and channel-format hints.
 
-2. “RT metrics need trust context, not just numbers.”
-- Analysis now emits decay-span and confidence estimates (`t60_confidence`, `edt_confidence`) plus warning surfacing.
+2. “You report RT values but don’t show truncation risk.”
+- Analysis now emits tail diagnostics (`tail_reaches_minus60db_s`, `tail_margin_to_end_s`) and warnings when tails are likely clipped.
 
-3. “I can’t reproduce runs exactly.”
-- Generation metadata includes a replay command and full conditioning trace with combined delta.
+3. “I can’t reproduce or verify artifacts exactly.”
+- Metadata includes replay command, full conditioning trace, and reproducibility hashes for IR/descriptor/channel-map payloads.
 
-4. “Sample-rate mismatch handling is either brittle or low quality.”
-- `render`/`morph` now support optional auto-resampling with selectable mode (`linear` or `cubic`).
+4. “There is no machine-checkable quality bar before release.”
+- `generate` and `analyze` now support quality gates with `lenient`, `launch`, and `strict` profiles and non-zero exit on failure.
 
-5. “Conditioning changes are opaque.”
-- `generate --explain-conditioning` prints model usage, deltas, and resolved descriptor snapshot.
+5. “Sample-rate mismatch handling is either brittle or low quality.”
+- `render`/`morph` support optional auto-resampling with selectable mode (`linear` or `cubic`).
 
 ## Demo Pack
 

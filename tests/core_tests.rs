@@ -1,5 +1,5 @@
 use approx::assert_relative_eq;
-use latent_ir::core::analysis::IrAnalyzer;
+use latent_ir::core::analysis::{evaluate_quality_gate, IrAnalyzer, QualityProfile};
 use latent_ir::core::descriptors::{
     CartesianPosition, ChannelFormat, ChannelSpec, CustomChannelLayout, DescriptorSet,
     SpatialEncoding,
@@ -364,6 +364,26 @@ fn analysis_reports_arrival_spread_itd_and_iacc_metrics() {
     assert!(report.iacc_early_01.unwrap_or(0.0) > 0.2);
     assert!(report.inter_channel_itd_mean_abs_ms.unwrap_or(0.0) > 0.1);
     assert!(report.inter_channel_iacc_early_mean.unwrap_or(0.0) > 0.2);
+}
+
+#[test]
+fn analysis_reports_tail_metrics_and_quality_gate_detects_failures() {
+    let sr = 48_000u32;
+    let n = (sr as usize) / 8;
+    let mut ir = vec![0.0f32; n];
+    ir[80] = 1.0;
+    for (i, s) in ir.iter_mut().enumerate().skip(81) {
+        let t = (i - 80) as f32 / sr as f32;
+        *s += (-(t / 0.02)).exp() * 0.08;
+    }
+
+    let report = IrAnalyzer::default().analyze(&[ir], sr);
+    assert!(report.crest_factor_db.is_finite());
+    assert!(report.tail_reaches_minus60db_s.is_none() || report.tail_margin_to_end_s.is_some());
+
+    let gate = evaluate_quality_gate(&report, QualityProfile::Launch);
+    assert!(!gate.passed);
+    assert!(!gate.failed_checks.is_empty());
 }
 
 #[test]
