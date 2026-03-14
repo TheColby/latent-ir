@@ -12,13 +12,29 @@ pub fn run(args: RenderArgs) -> Result<()> {
     let mix = args.mix.clamp(0.0, 1.0);
     let input = util::audio::read_wav_f32(&args.input)
         .with_context(|| format!("failed to read {}", args.input.display()))?;
-    let ir = util::audio::read_wav_f32(&args.ir)
+    let mut ir = util::audio::read_wav_f32(&args.ir)
         .with_context(|| format!("failed to read {}", args.ir.display()))?;
 
-    anyhow::ensure!(
-        input.sample_rate == ir.sample_rate,
-        "sample rates must match"
-    );
+    if input.sample_rate != ir.sample_rate {
+        if args.auto_resample {
+            println!(
+                "{}",
+                util::console::warning(&format!(
+                    "auto-resampling IR from {} Hz to {} Hz (linear)",
+                    ir.sample_rate, input.sample_rate
+                ))
+            );
+            ir.channels =
+                util::audio::resample_linear(&ir.channels, ir.sample_rate, input.sample_rate);
+            ir.sample_rate = input.sample_rate;
+        } else {
+            anyhow::bail!(
+                "sample rates must match (input={} Hz, ir={} Hz). Re-run with --auto-resample to reconcile automatically",
+                input.sample_rate,
+                ir.sample_rate
+            );
+        }
+    }
 
     let input_len = max_channel_len(&input.channels);
     let ir_len = max_channel_len(&ir.channels);

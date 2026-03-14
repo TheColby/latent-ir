@@ -36,6 +36,7 @@ Most reverb workflows are static: fixed presets, fixed measured IR libraries, or
 - Learned tooling: `train-encoder`, `eval`, `benchmark`, `model validate`, `ab-test`
 - Canonical descriptor model (`DescriptorSet`) across time/spectral/structural/spatial domains
 - Deterministic procedural IR generation with seed control
+- Tail-preserving duration floor in `generate` (opt out with `--allow-tail-truncation`)
 - Spatial layout support:
   - built-ins: `mono`, `stereo`, `foa`, `5.1`, `7.1`, `7.1.4`, `7.2.4`
   - custom JSON layouts (`--channels custom --layout-json ...`)
@@ -59,6 +60,7 @@ Most reverb workflows are static: fixed presets, fixed measured IR libraries, or
   - `direct`
   - `fft-partitioned`
   - `fft-streaming` (long-form multichannel)
+- Optional sample-rate reconciliation for `render` and `morph` with `--auto-resample`
 - Reproducible metadata sidecars and channel-map sidecars
 - CI regression gates for eval/benchmark/spatial/render QA
 
@@ -321,16 +323,18 @@ cargo run -- render long_program.wav \
 - `generate`
   - Inputs: prompt/preset, learned models (JSON or optional ONNX), descriptor overrides, channel layout options, geometry controls, seed, sample rate
   - Outputs: WAV IR, metadata JSON, channel-map JSON, optional analysis JSON
-  - Console: detailed metrics (decay, spectral, spatial/correlation, arrival/ITD/IACC)
+  - Console: detailed metrics (decay, spectral, spatial/correlation, arrival/ITD/IACC) + clamp/auto-adjust warnings
 - `analyze`
   - Inputs: IR WAV, optional channel map
   - Outputs: console metrics and/or JSON report
 - `morph`
   - Inputs: two IR WAVs and `--alpha`
   - Output: morphed IR WAV
+  - Optional `--auto-resample` when source IR sample rates differ
 - `render`
   - Inputs: dry WAV, IR WAV, `--mix`
   - Engines: `auto|direct|fft-partitioned|fft-streaming`
+  - Optional `--auto-resample` when dry and IR sample rates differ
 - `sample`
   - Outputs random descriptors (text/JSON)
 - `preset`

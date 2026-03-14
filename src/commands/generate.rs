@@ -19,8 +19,10 @@ use crate::core::util::{
 };
 
 pub fn run(args: GenerateArgs) -> Result<()> {
+    validate_generate_args(&args)?;
     let mut descriptor = DescriptorSet::default();
     let mut conditioning = ConditioningTrace::default();
+    let mut runtime_warnings = Vec::new();
 
     if let Some(name) = args.preset.as_deref() {
         descriptor =
@@ -163,7 +165,14 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         args.listener_y_m,
         args.listener_z_m,
     )?;
+    let pre_clamp = descriptor.clone();
     descriptor.clamp();
+    runtime_warnings.extend(descriptor_clamp_warnings(&pre_clamp, &descriptor));
+    apply_duration_floor(
+        &mut descriptor,
+        args.allow_tail_truncation,
+        &mut runtime_warnings,
+    );
 
     let generator = ProceduralIrGenerator::new(args.sample_rate);
     let generated = if let Some(traj) = trajectory.as_ref() {
@@ -182,11 +191,12 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         .unwrap_or_else(|| spatial::companion_channel_map_path(&args.output));
     util::json::write_pretty_json(&channel_map_path, &channel_map)?;
 
-    let analysis = IrAnalyzer::default().analyze_with_channel_map(
+    let mut analysis = IrAnalyzer::default().analyze_with_channel_map(
         &generated.channels,
         args.sample_rate,
         Some(&channel_map),
     );
+    analysis.warnings.extend(runtime_warnings);
     let channel_labels = descriptor.spatial.resolved_channel_labels();
 
     let metadata = GenerationMetadata {
@@ -230,6 +240,97 @@ pub fn run(args: GenerateArgs) -> Result<()> {
     Ok(())
 }
 
+fn validate_generate_args(args: &GenerateArgs) -> Result<()> {
+    anyhow::ensure!(
+        (8_000..=768_000).contains(&args.sample_rate),
+        "sample rate {} out of supported range [8000, 768000] Hz",
+        args.sample_rate
+    );
+    ensure_positive_finite("duration", args.duration, false)?;
+    ensure_positive_finite("t60", args.t60, false)?;
+    ensure_positive_finite("predelay-ms", args.predelay_ms, true)?;
+    ensure_positive_finite("edt", args.edt, false)?;
+    Ok(())
+}
+
+fn ensure_positive_finite(name: &str, v: Option<f32>, allow_zero: bool) -> Result<()> {
+    if let Some(v) = v {
+        anyhow::ensure!(v.is_finite(), "{name} must be finite");
+        if allow_zero {
+            anyhow::ensure!(v >= 0.0, "{name} must be >= 0");
+        } else {
+            anyhow::ensure!(v > 0.0, "{name} must be > 0");
+        }
+    }
+    Ok(())
+}
+
+fn descriptor_clamp_warnings(before: &DescriptorSet, after: &DescriptorSet) -> Vec<String> {
+    let mut out = Vec::new();
+    push_if_changed(
+        &mut out,
+        "duration_s",
+        before.time.duration,
+        after.time.duration,
+    );
+    push_if_changed(
+        &mut out,
+        "predelay_ms",
+        before.time.predelay_ms,
+        after.time.predelay_ms,
+    );
+    push_if_changed(&mut out, "t60_s", before.time.t60, after.time.t60);
+    push_if_changed(&mut out, "edt_s", before.time.edt, after.time.edt);
+    out
+}
+
+fn push_if_changed(out: &mut Vec<String>, label: &str, before: f32, after: f32) {
+    if (before - after).abs() > 1e-6 {
+        out.push(format!(
+            "descriptor '{label}' was clamped from {before:.4} to {after:.4}"
+        ));
+    }
+}
+
+fn apply_duration_floor(
+    descriptor: &mut DescriptorSet,
+    allow_tail_truncation: bool,
+    warnings: &mut Vec<String>,
+) {
+    let predelay_s = descriptor.time.predelay_ms.max(0.0) * 0.001;
+    let recommended = (predelay_s
+        + (descriptor.time.t60 * 1.15).max(descriptor.time.edt * 1.4)
+        + descriptor.time.attack_gap_ms.max(0.0) * 0.001
+        + 0.05)
+        .clamp(0.1, 30.0);
+
+    if descriptor.time.duration + 1e-6 >= recommended {
+        return;
+    }
+
+    if allow_tail_truncation {
+        warnings.push(format!(
+            "duration {:.3}s is below recommended {:.3}s for current decay settings; tail may truncate (--allow-tail-truncation enabled)",
+            descriptor.time.duration, recommended
+        ));
+        return;
+    }
+
+    let original = descriptor.time.duration;
+    descriptor.time.duration = recommended;
+    if (recommended - 30.0).abs() < 1e-6 {
+        warnings.push(format!(
+            "duration auto-extended from {:.3}s to {:.3}s (maximum supported); long T60 may still truncate near output end",
+            original, recommended
+        ));
+    } else {
+        warnings.push(format!(
+            "duration auto-extended from {:.3}s to {:.3}s to better capture requested decay",
+            original, recommended
+        ));
+    }
+}
+
 fn channel_format_from_arg(arg: ChannelFormatArg) -> ChannelFormat {
     match arg {
         ChannelFormatArg::Mono => ChannelFormat::Mono,
@@ -251,7 +352,13 @@ fn parse_position_triplet(
 ) -> Result<Option<CartesianPosition>> {
     match (x, y, z) {
         (None, None, None) => Ok(None),
-        (Some(x), Some(y), Some(z)) => Ok(Some(CartesianPosition { x, y, z })),
+        (Some(x), Some(y), Some(z)) => {
+            anyhow::ensure!(
+                x.is_finite() && y.is_finite() && z.is_finite(),
+                "{prefix} position coordinates must be finite numbers"
+            );
+            Ok(Some(CartesianPosition { x, y, z }))
+        }
         _ => anyhow::bail!(
             "{prefix} position requires all three coordinates: --{prefix}-x-m --{prefix}-y-m --{prefix}-z-m"
         ),

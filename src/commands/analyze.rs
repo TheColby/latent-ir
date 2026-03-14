@@ -260,6 +260,12 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
                     .unwrap_or_else(|| "n/a".to_string())
             )
         );
+        if !report.warnings.is_empty() {
+            println!("{}", util::console::warning("warnings:"));
+            for w in &report.warnings {
+                println!("  {}", util::console::warning(&format!("- {w}")));
+            }
+        }
     }
 
     Ok(())

@@ -34,6 +34,7 @@ This document is a practical checklist for public launch posts (for example Link
 6. Does this scale to large jobs?
 - Render `--engine auto` now selects `direct`, `fft-partitioned`, or `fft-streaming` based on workload/IR size and prints the decision.
 - For long-form multichannel, use `fft-streaming`.
+- Mixed sample-rate assets can be reconciled with `--auto-resample` in `render` and `morph`.
 
 7. Install issues (`latent-ir: command not found`)
 - Use `./scripts/install_local.sh`.

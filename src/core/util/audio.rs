@@ -75,3 +75,38 @@ pub fn write_wav_f32(
     writer.finalize()?;
     Ok(())
 }
+
+pub fn resample_linear(channels: &[Vec<f32>], src_rate: u32, dst_rate: u32) -> Vec<Vec<f32>> {
+    if src_rate == dst_rate {
+        return channels.to_vec();
+    }
+    channels
+        .iter()
+        .map(|ch| resample_channel_linear(ch, src_rate, dst_rate))
+        .collect()
+}
+
+fn resample_channel_linear(input: &[f32], src_rate: u32, dst_rate: u32) -> Vec<f32> {
+    if input.is_empty() {
+        return Vec::new();
+    }
+    if src_rate == dst_rate {
+        return input.to_vec();
+    }
+
+    let ratio = dst_rate as f64 / src_rate as f64;
+    let out_len = ((input.len() as f64) * ratio).round().max(1.0) as usize;
+    let mut out = vec![0.0f32; out_len];
+
+    for (i, sample) in out.iter_mut().enumerate() {
+        let src_pos = (i as f64) / ratio;
+        let i0 = src_pos.floor() as usize;
+        let i1 = (i0 + 1).min(input.len() - 1);
+        let frac = (src_pos - i0 as f64) as f32;
+        let a = input[i0];
+        let b = input[i1];
+        *sample = a + (b - a) * frac;
+    }
+
+    out
+}

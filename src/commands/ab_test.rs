@@ -193,6 +193,7 @@ fn build_generate_args(
         json_analysis_out: Some(json_analysis_out),
         sample_rate: args.sample_rate,
         seed: args.seed,
+        allow_tail_truncation: false,
         duration: args.duration,
         t60: args.t60,
         predelay_ms: args.predelay_ms,

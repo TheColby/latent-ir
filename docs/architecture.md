@@ -61,6 +61,7 @@ Main components:
    - image-source-lite first-order early reflections
 7. optional virtual source/listener steering via `source_position_m` / `listener_position_m`
 8. normalization and output sanity checks
+9. duration floor protection to reduce premature tail truncation (unless explicitly disabled)
 
 ## Spatial Model
 
@@ -108,6 +109,8 @@ Render supports three concrete engines:
 - `fft-streaming`
 
 `render --engine auto` selects an engine from input/IR/channel workload heuristics and reports the decision in console output. This keeps small jobs simple while scaling large multichannel jobs with lower memory pressure.
+
+`render` and `morph` also support optional linear sample-rate reconciliation (`--auto-resample`) for mixed-source workflows.
 
 ## Reproducibility Model
 

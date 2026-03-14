@@ -1,6 +1,7 @@
 use clap::Parser;
 use latent_ir::cli::Cli;
 use latent_ir::commands::dispatch;
+use latent_ir::core::util;
 use serde_json::Value;
 use tempfile::tempdir;
 
@@ -445,4 +446,185 @@ fn generate_rejects_partial_virtual_position_triplets() {
     assert!(err
         .to_string()
         .contains("source position requires all three coordinates"));
+}
+
+#[test]
+fn generate_auto_extends_duration_for_long_t60() {
+    let dir = tempdir().expect("tempdir");
+    let ir_path = dir.path().join("long_tail.wav");
+    let meta_path = dir.path().join("long_tail.meta.json");
+
+    let cli = Cli::try_parse_from([
+        "latent-ir",
+        "generate",
+        "--prompt",
+        "huge concrete space",
+        "--duration",
+        "0.8",
+        "--t60",
+        "10.0",
+        "--output",
+        ir_path.to_str().expect("utf8"),
+        "--metadata-out",
+        meta_path.to_str().expect("utf8"),
+    ])
+    .expect("parse");
+
+    dispatch(cli).expect("generate should succeed");
+
+    let meta: Value = serde_json::from_str(&std::fs::read_to_string(&meta_path).unwrap()).unwrap();
+    let duration = meta["descriptor"]["time"]["duration"]
+        .as_f64()
+        .unwrap_or(0.0) as f32;
+    assert!(duration > 5.0);
+    assert!(meta["warnings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|w| w.as_str().unwrap_or("").contains("auto-extended")));
+}
+
+#[test]
+fn generate_tail_truncation_flag_preserves_requested_short_duration() {
+    let dir = tempdir().expect("tempdir");
+    let ir_path = dir.path().join("short_tail.wav");
+    let meta_path = dir.path().join("short_tail.meta.json");
+
+    let cli = Cli::try_parse_from([
+        "latent-ir",
+        "generate",
+        "--prompt",
+        "huge concrete space",
+        "--duration",
+        "0.8",
+        "--t60",
+        "10.0",
+        "--allow-tail-truncation",
+        "--output",
+        ir_path.to_str().expect("utf8"),
+        "--metadata-out",
+        meta_path.to_str().expect("utf8"),
+    ])
+    .expect("parse");
+
+    dispatch(cli).expect("generate should succeed");
+
+    let meta: Value = serde_json::from_str(&std::fs::read_to_string(&meta_path).unwrap()).unwrap();
+    let duration = meta["descriptor"]["time"]["duration"]
+        .as_f64()
+        .unwrap_or(0.0) as f32;
+    assert!(duration < 1.1);
+    assert!(meta["warnings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|w| w.as_str().unwrap_or("").contains("tail may truncate")));
+}
+
+#[test]
+fn render_auto_resamples_ir_when_sample_rates_mismatch() {
+    let dir = tempdir().expect("tempdir");
+    let input_path = dir.path().join("input_48k.wav");
+    let ir_path = dir.path().join("ir_44k.wav");
+    let out_path = dir.path().join("rendered.wav");
+
+    util::audio::write_wav_f32(
+        &input_path,
+        48_000,
+        &[vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]],
+    )
+    .unwrap();
+    util::audio::write_wav_f32(&ir_path, 44_100, &[vec![1.0, 0.2, 0.1, 0.0]]).unwrap();
+
+    let cli = Cli::try_parse_from([
+        "latent-ir",
+        "render",
+        input_path.to_str().expect("utf8"),
+        "--ir",
+        ir_path.to_str().expect("utf8"),
+        "--auto-resample",
+        "--output",
+        out_path.to_str().expect("utf8"),
+    ])
+    .expect("parse");
+
+    dispatch(cli).expect("render should succeed");
+    let out = util::audio::read_wav_f32(&out_path).unwrap();
+    assert_eq!(out.sample_rate, 48_000);
+    assert_eq!(out.channels.len(), 1);
+}
+
+#[test]
+fn morph_auto_resamples_second_ir_when_sample_rates_mismatch() {
+    let dir = tempdir().expect("tempdir");
+    let a_path = dir.path().join("a_48k.wav");
+    let b_path = dir.path().join("b_44k.wav");
+    let out_path = dir.path().join("morph.wav");
+
+    util::audio::write_wav_f32(&a_path, 48_000, &[vec![1.0, 0.5, 0.25, 0.0]]).unwrap();
+    util::audio::write_wav_f32(&b_path, 44_100, &[vec![0.0, 1.0, 0.0, 0.0]]).unwrap();
+
+    let cli = Cli::try_parse_from([
+        "latent-ir",
+        "morph",
+        a_path.to_str().expect("utf8"),
+        b_path.to_str().expect("utf8"),
+        "--alpha",
+        "0.5",
+        "--auto-resample",
+        "--output",
+        out_path.to_str().expect("utf8"),
+    ])
+    .expect("parse");
+
+    dispatch(cli).expect("morph should succeed");
+    let out = util::audio::read_wav_f32(&out_path).unwrap();
+    assert_eq!(out.sample_rate, 48_000);
+    assert_eq!(out.channels.len(), 1);
+}
+
+#[test]
+fn render_mismatched_sample_rates_suggest_auto_resample() {
+    let dir = tempdir().expect("tempdir");
+    let input_path = dir.path().join("input_48k.wav");
+    let ir_path = dir.path().join("ir_44k.wav");
+    let out_path = dir.path().join("rendered.wav");
+
+    util::audio::write_wav_f32(&input_path, 48_000, &[vec![1.0, 0.0, 0.0, 0.0]]).unwrap();
+    util::audio::write_wav_f32(&ir_path, 44_100, &[vec![1.0, 0.0, 0.0, 0.0]]).unwrap();
+
+    let cli = Cli::try_parse_from([
+        "latent-ir",
+        "render",
+        input_path.to_str().expect("utf8"),
+        "--ir",
+        ir_path.to_str().expect("utf8"),
+        "--output",
+        out_path.to_str().expect("utf8"),
+    ])
+    .expect("parse");
+
+    let err = dispatch(cli).expect_err("render should fail without auto-resample");
+    assert!(err.to_string().contains("--auto-resample"));
+}
+
+#[test]
+fn generate_rejects_out_of_range_sample_rate() {
+    let dir = tempdir().expect("tempdir");
+    let ir_path = dir.path().join("bad_sr.wav");
+
+    let cli = Cli::try_parse_from([
+        "latent-ir",
+        "generate",
+        "--prompt",
+        "test",
+        "--sample-rate",
+        "2000",
+        "--output",
+        ir_path.to_str().expect("utf8"),
+    ])
+    .expect("parse");
+
+    let err = dispatch(cli).expect_err("out of range sample rate should fail");
+    assert!(err.to_string().contains("supported range"));
 }

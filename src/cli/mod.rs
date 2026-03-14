@@ -89,6 +89,12 @@ pub struct GenerateArgs {
     #[arg(long, default_value_t = 42)]
     pub seed: u64,
 
+    /// Allow generated tails to be shorter than recommended for the requested T60/predelay.
+    ///
+    /// By default latent-ir auto-extends duration to reduce premature tail truncation.
+    #[arg(long, default_value_t = false)]
+    pub allow_tail_truncation: bool,
+
     #[arg(long)]
     pub duration: Option<f32>,
 
@@ -206,6 +212,10 @@ pub struct MorphArgs {
     #[arg(long, default_value_t = 0.5)]
     pub alpha: f32,
 
+    /// Automatically resample the second IR to match the first IR sample rate when needed.
+    #[arg(long, default_value_t = false)]
+    pub auto_resample: bool,
+
     /// Output WAV path.
     #[arg(short, long)]
     pub output: PathBuf,
@@ -231,6 +241,10 @@ pub struct RenderArgs {
     /// Partition size for FFT partitioned convolution.
     #[arg(long, default_value_t = 2048)]
     pub partition_size: usize,
+
+    /// Automatically resample IR to match input sample rate when needed.
+    #[arg(long, default_value_t = false)]
+    pub auto_resample: bool,
 
     /// Output WAV path.
     #[arg(short, long)]
