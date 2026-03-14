@@ -1,150 +1,120 @@
 # Learned Encoders
 
-`latent-ir` supports learned descriptor conditioning through two model types loaded from JSON:
+`latent-ir` supports lightweight learned conditioning models that produce descriptor deltas.
+
+These models are intentionally inspectable and deterministic in v0.x.
+
+## Supported Model Families
 
 - `LearnedTextEncoderModel`
 - `LearnedAudioEncoderModel`
 
-These are intentionally lightweight and fully inspectable for v0.1.
-
-The project also supports ONNX inference backends behind the cargo feature flag `onnx`.
+Optional ONNX runtime adapters are available behind the `onnx` cargo feature.
 
 ## Text Encoder
 
-Model fields:
+Typical model fields:
 
 - `model_version`
 - `embedding_dim`
-- `token_embeddings`: token -> embedding vector
+- `token_embeddings`
 - `unknown_embedding`
-- `projection`: linear projection from embedding -> descriptor deltas
+- `projection`
 - `bias`
 - `output_scale`
 
 Inference flow:
 
 1. tokenize prompt
-2. average token embeddings
-3. project embedding to `DescriptorDelta`
+2. aggregate token embeddings
+3. project to descriptor delta
 4. apply delta to `DescriptorSet`
 
 ## Audio Encoder
 
-Model fields:
+Typical model fields:
 
 - `model_version`
 - `feature_names`
 - `input_mean`, `input_std`
-- `hidden_weights`, `hidden_bias` (single hidden tanh layer)
+- `hidden_weights`, `hidden_bias`
 - `projection`, `bias`, `output_scale`
 
-Audio frontend features (v0.1):
-
-- duration
-- peak
-- RMS
-- zero crossing rate
-- predelay estimate (normalized)
-- early energy ratio
-- low/mid/high energy ratios
-- normalized centroid proxy
+Current engineered feature frontend includes duration/peak/RMS/ZCR/predelay and coarse spectral-energy summaries.
 
 Inference flow:
 
-1. extract feature vector from reference audio
-2. normalize features
-3. run hidden layer + tanh
-4. project hidden state to `DescriptorDelta`
+1. extract features from reference audio
+2. normalize feature vector
+3. run hidden transform
+4. project to descriptor delta
 5. apply delta to `DescriptorSet`
-
-## Scope Notes
-
-- These are learned weight paths, not large foundation models.
-- Models are deterministic and file-driven.
-- The CLI still supports rule-based semantics and explicit overrides; those remain first-class and composable.
 
 ## ONNX Inference
 
-Enable with:
+Enable ONNX path:
 
 ```bash
 cargo run --features onnx -- generate ...
 ```
 
-ONNX assumptions in current scaffold:
+Current scaffold assumptions:
 
-- text ONNX model input: single `[1, input_dim]` hashed token feature vector
-- audio ONNX model input: single `[1, 10]` engineered audio feature vector
-- output: at least 20 floats mapping to descriptor deltas in canonical field order
+- text ONNX input: `[1, input_dim]` hashed prompt feature vector
+- audio ONNX input: `[1, 10]` engineered feature vector
+- output: descriptor delta vector (canonical field order)
 
-## Training Utility
-
-`latent-ir` includes:
+## Training Commands
 
 - `train-encoder text`
 - `train-encoder audio`
 
-### Text dataset format
-
-JSON array:
+Text dataset format:
 
 ```json
 [
   {
     "prompt": "dark stone cathedral",
-    "descriptor": { "... DescriptorSet fields ..." : "..." }
+    "descriptor": { "...": "..." }
   }
 ]
 ```
 
-### Audio dataset format
-
-JSON array:
+Audio dataset format:
 
 ```json
 [
   {
-    "audio_path": "relative/or/absolute/path.wav",
-    "descriptor": { "... DescriptorSet fields ..." : "..." }
+    "audio_path": "relative/or/absolute.wav",
+    "descriptor": { "...": "..." }
   }
 ]
 ```
 
-Audio paths are resolved relative to the dataset file when not absolute.
+Relative `audio_path` values are resolved from the dataset file directory.
 
-### Industrial text-conditioning starter dataset
-
-This repo includes:
+Industrial starter set included:
 
 - `examples/datasets/text_pairs_industrial.json`
 
-It focuses on industrial structures/materials (silos, bunkers, cisterns, hangars, corrugated steel, poured concrete).
+## Evaluation Commands
 
-Train from it with:
-
-```bash
-cargo run -- train-encoder text \
-  --dataset examples/datasets/text_pairs_industrial.json \
-  --output models/text_encoder_industrial_v1.json \
-  --max-vocab 512 \
-  --epochs 1200
-```
-
-## Evaluation Utility
-
-Use `eval text` or `eval audio` to generate baseline reports for held-out sets.
+- `eval text`
+- `eval audio`
+- `eval check`
 
 Baseline report schema:
 
-- `schema_version`: `latent-ir.eval.baseline.v1`
-- `sample_count`
-- `descriptor_metrics`:
-  - `mae`
-  - `rmse`
-  - `per_field_mae`
-- `analysis_metrics`:
-  - `mae`
-  - `rmse`
-  - `per_metric_mae`
+- `latent-ir.eval.baseline.v1`
 
-This report is intended to be checked in or archived so future model/generator changes can be compared against a stable reference.
+Core sections:
+
+- descriptor MAE/RMSE
+- analysis MAE/RMSE
+- per-field/per-metric detail maps
+
+## Scope Notes
+
+- These are not large pretrained transformer encoders.
+- DSP fallback and explicit overrides remain first-class.
+- The learned path is additive and auditable, not opaque replacement logic.

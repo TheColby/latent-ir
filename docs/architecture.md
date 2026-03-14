@@ -2,89 +2,124 @@
 
 ## Thesis
 
-`latent-ir` treats reverberation as a descriptor-conditioned design space rather than a fixed IR library.
+`latent-ir` models reverberation as a descriptor-conditioned acoustic design space.
 
 Core principle:
 
-**ML chooses acoustic behavior, DSP builds and validates the IR.**
+**ML selects or infers intent; DSP synthesizes and validates the IR.**
 
-In v0, the ML side is represented by explicit extension interfaces and rule-based semantic conditioning. DSP is fully active and generates real outputs.
-v0.1 also includes learned text/audio encoder hooks that load small model weights from JSON and infer descriptor deltas directly in the CLI pipeline.
+The system stays deterministic and auditable even when learned modules are present.
 
-## Descriptor-Conditioned Generation
+## System Pipeline
 
-Canonical acoustic state is represented by `DescriptorSet` with grouped domains:
+```text
+prompt / reference audio / explicit params
+-> conditioning chain
+-> DescriptorSet
+-> ProceduralIrGenerator
+-> normalization + constraints
+-> final IR
+-> IrAnalyzer + JSON sidecars
+```
 
-- Time: duration, predelay, T60, EDT, attack gap
-- Spectral: brightness, HF damping, LF bloom, spectral tilt, low/mid/high decay multipliers
+## Canonical Acoustic Representation
+
+`DescriptorSet` groups parameters into four domains:
+
+- Time: `duration`, `predelay`, `t60`, `edt`, `attack_gap`
+- Spectral: `brightness`, `hf_damping`, `lf_bloom`, `spectral_tilt`, band decays
 - Structural: early/late density, diffusion, modal density, tail noise, grain
-- Spatial: channel format, width, decorrelation, asymmetry, optional custom channel geometry
+- Spatial: format, width, decorrelation, asymmetry, custom layout geometry, optional source/listener positions
 
-Generation pipeline resolves descriptor values from:
+This representation is the interoperability contract across generation, analysis, learning, and metadata.
 
-1. built-in preset (optional)
-2. semantic prompt token mapping (optional)
-3. explicit CLI overrides
-4. range clamps and normalization
+## Conditioning Layers
 
-## Procedural IR Decomposition
+Current chain can combine:
 
-The procedural generator synthesizes IRs as layered components:
+- preset defaults
+- rule-based semantic resolver
+- learned text encoder (JSON model; optional ONNX backend)
+- learned audio encoder (JSON model; optional ONNX backend)
+- explicit CLI overrides
 
-1. direct impulse at predelay
-2. sparse early reflection field with density and spatial spread
-3. dense late stochastic tail
-4. frequency-weighted envelope shaping via band-dependent decay constants
-5. layout projection: discrete speaker layouts (`mono`, `stereo`, `5.1`, `7.1`, `7.1.4`, `7.2.4`, `custom`) or FOA ambiX (`WXYZ`)
-6. decorrelation jitter and width shaping
-7. output normalization and sanity bounds
+Conditioning outputs descriptor deltas that are applied before clamping and generation.
 
-This is intentionally practical, deterministic, and auditable.
+## Procedural IR Synthesis
 
-## Semantic Prompt Conditioning (v0)
+Main components:
 
-`SemanticResolver` provides deterministic token-based rules (e.g. `cathedral`, `steel`, `wood`, `dark`, `bright`, `infinite`).
+1. direct impulse/predelay anchor
+2. sparse early reflections
+3. dense stochastic late tail
+4. frequency-dependent envelope shaping
+5. spatial projection to built-in or custom channel layouts
+6. geometry-aware custom shaping from `position_m`:
+   - relative propagation delay
+   - distance gain falloff
+   - HF air-loss
+   - image-source-lite first-order early reflections
+7. optional virtual source/listener steering via `source_position_m` / `listener_position_m`
+8. normalization and output sanity checks
 
-This is explicitly not a learned text model. It exists to validate CLI flow and descriptor-conditioning architecture while keeping outputs reproducible.
+## Spatial Model
 
-In parallel, `LearnedTextEncoder` can be supplied in `generate` to apply learned prompt-conditioned descriptor deltas before semantic rules and explicit overrides.
+Built-in layouts:
 
-## Future ML Module Interfaces
+- `mono`, `stereo`, `foa` (ambiX), `5.1`, `7.1`, `7.1.4`, `7.2.4`
 
-Planned extension path:
+Custom layout JSON supports:
 
-- `ConditioningModel` traits for text/audio/reference inference
-- richer learned text/audio models (ONNX, safetensors, or custom backends)
-- learned encoders producing descriptor priors or latent embeddings
-- latent -> descriptor projection with constraint checks
-- hybrid generator modes combining latent proposals with DSP enforcement
+- polar (`azimuth_deg` + `elevation_deg`)
+- cartesian (`position_m`)
+- mixed inputs with consistency validation
 
-Guiding constraint: learned components should be optional and never remove deterministic DSP fallback.
+Coordinate convention for cartesian->polar derivation:
+
+- `+Y = 0 deg azimuth`
+- `+X = +90 deg azimuth`
+- `+Z = elevation`
+
+`generate` emits validated `*.channels.json` channel-map sidecars for downstream analysis/routing reproducibility.
 
 ## Analysis Philosophy
 
-v0 analysis targets robust engineering estimates suitable for CLI workflows:
+Metrics are intentionally engineering-focused and deterministic:
 
-- duration / peak / RMS
-- EDC-based decay estimates (EDT, T20, T30, T60)
+- EDC decay estimates: EDT/T20/T30/T60
 - predelay estimate
-- spectral centroid summary
-- coarse low/mid/high decay splits
-- stereo pair correlation (channel 0/1 for multichannel material)
-- inter-channel correlation matrix + mean/min absolute summaries
-- directional energy balance (front/rear/height/LFE) when channel map is available
-- early-vs-late energy ratio
+- spectral centroid + band decay summaries
+- early/late energy ratios
+- stereo and inter-channel correlation summaries
+- directional energy summaries (front/rear/height/LFE with channel map)
+- arrival spread summaries
+- ITD-ish and IACC-style early coherence metrics
 
-Metrics are intentionally labeled as approximations where standards-grade compliance is not yet implemented.
+These are not standards-certified architectural acoustics measurements.
 
-## Reproducibility Philosophy
+## Reproducibility Model
 
-Every generation run should be reproducible from:
+A run is intended to be reproducible from:
 
+- command arguments
 - seed
-- resolved descriptor set
 - sample rate
-- command context
+- resolved descriptor state
+- model files/manifests used
 - project version
 
-`generate` writes companion JSON metadata with analysis report and warnings, plus a validated channel-map sidecar (`*.channels.json`) that captures channel order and geometry. This makes batch runs scriptable and traceable for both research and product workflows.
+Artifacts:
+
+- WAV output
+- generation metadata JSON (`latent-ir.generation.v1`)
+- analysis report (`latent-ir.analysis.v1`)
+- channel map sidecar (`latent-ir.channel-map.v1`)
+
+## Forward Compatibility
+
+Planned extensibility points:
+
+- richer latent conditioning contracts
+- confidence/uncertainty propagation
+- trajectory-conditioned morph/generation
+- stronger spatial/object/array abstractions

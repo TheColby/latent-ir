@@ -1,15 +1,15 @@
 # Perceptual Controls
 
-`latent-ir generate` now supports macro-level perceptual control primitives.
+`latent-ir generate` exposes macro-level controls for fast descriptor steering.
 
-## Macros
+## Macro Controls
 
-All macro ranges are `[-1, 1]`.
+Range for each macro is `[-1, 1]`.
 
-- `--macro-size`: perceived room/space size
-- `--macro-distance`: source-listener distance impression
-- `--macro-material`: hardness/brightness of surfaces
-- `--macro-clarity`: reflection clarity vs smearing/noise
+- `--macro-size`: perceived space size
+- `--macro-distance`: perceived source-listener distance
+- `--macro-material`: perceived material hardness/brightness
+- `--macro-clarity`: perceived clarity vs smearing
 
 Example:
 
@@ -23,18 +23,32 @@ cargo run -- generate \
   --output out/macro_ir.wav
 ```
 
-## Trajectory automation
+## Trajectory Automation
 
-Use `--macro-trajectory` to automate macros over normalized time.
-
-Trajectory schema:
+`--macro-trajectory` accepts a normalized-time keyframe file:
 
 ```json
 {
   "schema_version": "latent-ir.macro-trajectory.v1",
   "keyframes": [
-    {"t": 0.0, "controls": {"size": -0.2, "distance": 0.0, "material": 0.0, "clarity": 0.2}},
-    {"t": 1.0, "controls": {"size": 0.9, "distance": 0.5, "material": 0.3, "clarity": -0.1}}
+    {
+      "t": 0.0,
+      "controls": {
+        "size": -0.2,
+        "distance": 0.0,
+        "material": 0.0,
+        "clarity": 0.2
+      }
+    },
+    {
+      "t": 1.0,
+      "controls": {
+        "size": 0.9,
+        "distance": 0.5,
+        "material": 0.3,
+        "clarity": -0.1
+      }
+    }
   ]
 }
 ```
@@ -48,4 +62,10 @@ cargo run -- generate \
   --output out/trajectory_ir.wav
 ```
 
-The current implementation uses trajectory-conditioned segment synthesis and overlap blending for a dynamic IR evolution profile.
+Current implementation uses trajectory-conditioned segmented synthesis and overlap blending.
+
+## Practical Guidance
+
+- Start with small macro moves (`|value| <= 0.4`) before extreme values.
+- Combine macros with explicit overrides (`--t60`, `--predelay-ms`) when exact targets are needed.
+- Keep deterministic seeds during A/B work.

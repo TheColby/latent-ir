@@ -1,57 +1,59 @@
 # latent-ir Roadmap
 
-## v0.1 - Foundation (completed)
+## v0.1 Foundation (completed)
 
-- Stable CLI with subcommands: `generate`, `analyze`, `morph`, `render`, `sample`, `preset`
-- Canonical descriptor model and preset system
-- Procedural deterministic IR generator (mono/stereo + FOA/surround/Atmos layouts)
-- Approximate engineering analysis metrics and JSON reports
-- Offline convolution rendering path
-- Core tests for deterministic behavior and pipeline sanity
+- CLI with core commands: `generate`, `analyze`, `morph`, `render`, `sample`, `preset`
+- Canonical descriptor model + presets
+- Procedural deterministic IR synthesis
+- Engineering analysis reports + JSON outputs
+- Baseline offline rendering pipeline
+- Initial test coverage for deterministic behavior
 
-## v0.2 - Better Acoustics + Data Model (mostly completed)
+## v0.2 Acoustics + Data Model (mostly completed)
 
-- Improved early-reflection statistical models
-- Better band decay estimation and robustness checks
-- Reference-audio descriptor extraction (non-learned baseline)
-- IR metadata schema versioning
-- Batch generation/analyze modes and richer machine-readable outputs
+- Improved reflection/tail shaping and decay robustness
+- Reference-audio descriptor extraction baseline
+- Metadata/report schema versioning
 - Learned JSON text/audio encoders
 - Optional ONNX inference backend (feature-gated)
-- `train-encoder` and `eval` command workflows
-- Benchmark lab with CI-friendly `benchmark check`
+- `train-encoder`, `eval`, and `benchmark` workflows
 - Perceptual macro controls + trajectory automation
-- FFT-partitioned render engine with direct-path reference tests
+- FFT-partitioned render engine
 
-## v0.3 - Hybrid Conditioning Interfaces (in progress)
+## v0.3 Hybrid Conditioning + Spatial Rigor (in progress)
 
-- Explicit conditioning traits for pluggable learned modules
-- Optional text encoder integration behind feature flags
-- Optional reference-audio embedding adapter
-- Descriptor constraint projection and confidence tracking
-- Morphing upgrades (envelope-aware + descriptor-space coupling)
-- Model manifest schema + runtime compatibility validation (`model validate`)
-- Custom channel-layout ingestion (`--channels custom --layout-json ...`)
-- Validated channel-map sidecar emission/ingestion (`*.channels.json`)
-- Upgraded FFT partitioned convolution core (FDL overlap-save style)
-- Multichannel analysis metrics (correlation matrix + directional energy balances)
+Delivered in this phase so far:
 
-Remaining for v0.3:
+- Model manifest validation (`model validate`)
+- CI regression gates (`eval check`, `benchmark check`)
+- Streaming FFT render mode (`render --engine fft-streaming`)
+- Custom layout ingestion with polar/cartesian validation
+- Spatial channel-map sidecar emission/ingestion
+- Spatial corpus envelope regression tests
+- Spatial render QA (streaming/direct parity + block-boundary checks)
+- Geometry-aware custom synthesis from `position_m`
+  - distance delay/gain/HF shaping
+  - image-source-lite early reflections
+- Virtual source/listener controls
+- Arrival spread + ITD/IACC-style analysis metrics
 
-- Latent-space descriptor priors and constrained projection APIs
-- Confidence calibration/uncertainty reporting in conditioning chain
-- Descriptor trajectory-conditioned morphing coupling
+Remaining high-impact items for v0.3:
 
-## v1.0 - Research/Product Grade Toolkit
+- Latent-vector projection contracts and constrained priors
+- Conditioning confidence/uncertainty reporting
+- Descriptor trajectory-coupled morphing
 
-- Robust reproducible pipelines for dataset-scale runs
-- Optimized rendering paths (FFT partitioned convolution)
-- Stronger acoustic metric suite and validation harness
-- Plugin-ready library APIs (while staying CLI-first)
-- End-to-end docs for hybrid DSP + ML model development and evaluation
+## v1.0 Research/Product Grade
+
+- Dataset-scale batch tooling and reproducibility hardening
+- Higher-performance render kernels and memory optimization
+- Broader validation against external references
+- Stable library APIs while preserving CLI-first workflow
+- Extended docs for model development and evaluation lifecycle
 
 ## Next Milestone Focus
 
-1. Latent-ready conditioning contracts (`LatentVector` + projection interfaces)
-2. Benchmark/eval baseline suites in CI for mandatory regression gates
-3. Layout-aware render/analyze benchmark corpus for large custom arrays
+1. Latent-ready conditioning contracts (`LatentVector` + constrained projection APIs)
+2. Confidence/uncertainty propagation through conditioning and metadata
+3. Descriptor-trajectory-conditioned morphing and generation controls
+4. Larger spatial benchmark suite and trend dashboards

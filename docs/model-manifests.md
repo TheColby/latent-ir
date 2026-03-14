@@ -1,34 +1,40 @@
 # Model Manifests
 
-`latent-ir` uses model manifests to declare runtime compatibility and enforce stable contracts.
+Model manifests declare runtime compatibility contracts for learned models.
 
-## Schema
+Schema version:
 
-`schema_version`: `latent-ir.model-manifest.v1`
+- `latent-ir.model-manifest.v1`
 
-Fields:
+## Manifest Fields
 
 - `name`: model identifier
-- `format`: one of
+- `format`:
   - `text_json_v1`
   - `audio_json_v1`
   - `text_onnx_v1`
   - `audio_onnx_v1`
-- `model_path`: path to model file
-- `input_dim`: declared input dimension
-- `output_dim`: must be `20` (descriptor delta size)
-- `deterministic`: boolean
-- `required_features`: e.g. `["onnx"]`
+- `model_path`: model file path
+- `input_dim`: declared input width
+- `output_dim`: descriptor delta width (currently `20`)
+- `deterministic`: whether inference is deterministic
+- `required_features`: runtime feature requirements (for example `"onnx"`)
 
-## Validate command
+## Validation Command
 
 ```bash
 cargo run -- model validate --manifest manifests/text_encoder_manifest.json
 ```
 
-Validation checks:
+Validation checks include:
 
-- schema version compatibility
-- output dimension compatibility with runtime descriptor contract
-- required feature availability (e.g. `onnx`)
-- format-specific structural checks
+- schema/version compatibility
+- output-dimension compatibility with runtime descriptor contract
+- required feature availability
+- format-specific constraints
+
+## Why Use Manifests
+
+- explicit runtime contract for models
+- safer model swapping in scripts/CI
+- better long-term reproducibility for experiments and releases
