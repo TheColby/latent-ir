@@ -99,6 +99,10 @@ pub struct GenerateArgs {
     #[arg(long, default_value_t = false)]
     pub allow_tail_truncation: bool,
 
+    /// Optional end taper length in milliseconds to force smooth decay to exact zero at file end.
+    #[arg(long)]
+    pub tail_fade_ms: Option<f32>,
+
     /// Run post-generation quality checks and return non-zero on failure.
     #[arg(long, default_value_t = false)]
     pub quality_gate: bool,

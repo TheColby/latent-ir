@@ -61,6 +61,7 @@ Procedural IR decomposition:
 Tail behavior guardrail:
 - generation applies a duration floor by default to reduce premature tail truncation
 - user can opt out via `--allow-tail-truncation`
+- optional output taper (`--tail-fade-ms`) can force exact zero at file end for cleaner audition boundaries
 
 ## Spatial Model
 

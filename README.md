@@ -37,6 +37,7 @@ Most reverb workflows are static: fixed presets, fixed measured IR libraries, or
 - Canonical descriptor model (`DescriptorSet`) across time/spectral/structural/spatial domains
 - Deterministic procedural IR generation with seed control
 - Tail-protection guardrail in `generate` (opt out with `--allow-tail-truncation`)
+- Optional explicit file-end taper in `generate` (`--tail-fade-ms`) to force smooth decay to zero
 - Prompt parser extracts more explicit acoustic directives (for example RT60, predelay, duration, channel-hint tokens)
 - Spatial support:
   - built-ins: `mono`, `stereo`, `foa`, `5.1`, `7.1`, `7.1.4`, `7.2.4`
@@ -62,6 +63,7 @@ Most reverb workflows are static: fixed presets, fixed measured IR libraries, or
 
 - Descriptor clamp changes are surfaced as warnings.
 - Tail-truncation risk is surfaced and auto-corrected by default.
+- Optional end taper can enforce exact zero at file end (`--tail-fade-ms`).
 - Mixed sample-rate workflows get explicit guidance or optional auto-resampling.
 - Analysis caveats are always printed in console output.
 - Metadata now includes a replay command string and combined conditioning delta.
@@ -118,6 +120,7 @@ cargo run -- generate \
   --prompt "vast icy cathedral" \
   --explain-conditioning \
   --t60 12 \
+  --tail-fade-ms 35 \
   --channels stereo \
   --seed 1337 \
   --output out/cathedral_ir.wav
@@ -212,6 +215,7 @@ Metadata includes:
   - validates and reports descriptor corrections
   - if `--channels` is omitted, prompt/preset channel-format intent can resolve output format
   - `--explain-conditioning` prints resolved conditioning deltas and descriptor snapshot
+  - `--tail-fade-ms` applies an explicit end taper so output reaches exact zero at file end
   - optional quality gate (`--quality-gate --quality-profile ...`) with pass/fail checks in metadata
 - `analyze`
   - prints metrics, confidence estimates, and warnings; supports JSON output

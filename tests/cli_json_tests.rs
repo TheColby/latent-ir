@@ -629,6 +629,70 @@ fn generate_tail_truncation_flag_preserves_requested_short_duration() {
 }
 
 #[test]
+fn generate_tail_fade_forces_zero_file_end_and_replay_records_flag() {
+    let dir = tempdir().expect("tempdir");
+    let no_fade_path = dir.path().join("no_fade.wav");
+    let fade_path = dir.path().join("fade.wav");
+    let fade_meta_path = dir.path().join("fade.meta.json");
+
+    let common = [
+        "latent-ir",
+        "generate",
+        "--prompt",
+        "huge concrete space",
+        "--duration",
+        "0.35",
+        "--t60",
+        "10.0",
+        "--allow-tail-truncation",
+        "--seed",
+        "12345",
+    ];
+
+    let no_fade = Cli::try_parse_from(
+        common
+            .iter()
+            .copied()
+            .chain(["--output", no_fade_path.to_str().expect("utf8")].into_iter()),
+    )
+    .expect("parse");
+    dispatch(no_fade).expect("generate no-fade should succeed");
+
+    let fade = Cli::try_parse_from(
+        common.iter().copied().chain(
+            [
+                "--tail-fade-ms",
+                "40",
+                "--output",
+                fade_path.to_str().expect("utf8"),
+                "--metadata-out",
+                fade_meta_path.to_str().expect("utf8"),
+            ]
+            .into_iter(),
+        ),
+    )
+    .expect("parse");
+    dispatch(fade).expect("generate fade should succeed");
+
+    let no_fade = util::audio::read_wav_f32(&no_fade_path).expect("read no-fade");
+    let fade = util::audio::read_wav_f32(&fade_path).expect("read fade");
+    let a = &no_fade.channels[0];
+    let b = &fade.channels[0];
+    assert_eq!(a.len(), b.len());
+
+    let window = 128usize.min(a.len());
+    let no_fade_tail = a[a.len() - window..].iter().map(|x| x.abs()).sum::<f32>() / window as f32;
+    let fade_tail = b[b.len() - window..].iter().map(|x| x.abs()).sum::<f32>() / window as f32;
+    assert!(fade_tail < no_fade_tail * 0.3);
+    assert!(b.last().copied().unwrap_or(1.0).abs() <= 1e-7);
+
+    let meta: Value =
+        serde_json::from_str(&std::fs::read_to_string(&fade_meta_path).expect("meta")).unwrap();
+    let replay = meta["replay_command"].as_str().unwrap_or("");
+    assert!(replay.contains("--tail-fade-ms 40"));
+}
+
+#[test]
 fn render_auto_resamples_ir_when_sample_rates_mismatch() {
     let dir = tempdir().expect("tempdir");
     let input_path = dir.path().join("input_48k.wav");

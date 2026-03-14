@@ -195,6 +195,7 @@ fn build_generate_args(
         sample_rate: args.sample_rate,
         seed: args.seed,
         allow_tail_truncation: false,
+        tail_fade_ms: None,
         quality_gate: false,
         quality_profile: QualityProfileArg::Launch,
         duration: args.duration,
