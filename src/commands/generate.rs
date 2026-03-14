@@ -12,6 +12,7 @@ use crate::core::descriptors::{CartesianPosition, ChannelFormat, DescriptorSet};
 use crate::core::generator::{generate_with_macro_trajectory, IrGenerator, ProceduralIrGenerator};
 use crate::core::perceptual::{MacroControls, MacroTrajectory};
 use crate::core::presets;
+use crate::core::semantics::channel_format_hint;
 use crate::core::spatial;
 use crate::core::util::{
     self,
@@ -141,20 +142,27 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         None
     };
 
-    spatial::ensure_custom_layout_requested(
-        args.channels == ChannelFormatArg::Custom,
-        args.layout_json.is_some(),
-    )?;
+    let wants_custom_layout =
+        resolve_custom_layout_intent(args.channels, args.layout_json.is_some())?;
     if let Some(layout_path) = args.layout_json.as_deref() {
         let layout = spatial::load_custom_layout_file(layout_path)?;
         descriptor.spatial.set_custom_layout(layout);
+    } else if wants_custom_layout {
+        anyhow::bail!("--channels custom requires --layout-json <path>");
     }
 
     descriptor.apply_overrides(args.duration, args.t60, args.predelay_ms, args.edt);
     descriptor.apply_spectral_overrides(args.brightness, None, None, None);
     descriptor.apply_structure_overrides(args.early_density, args.late_density, args.diffusion);
+    let semantic_channel_hint = if args.channels.is_none() && args.layout_json.is_none() {
+        args.prompt.as_deref().and_then(channel_format_hint)
+    } else {
+        None
+    };
     descriptor.apply_spatial_overrides(
-        Some(channel_format_from_arg(args.channels)),
+        args.channels
+            .map(channel_format_from_arg)
+            .or(semantic_channel_hint),
         args.width,
         args.decorrelation,
         None,
@@ -325,8 +333,13 @@ fn build_replay_command(args: &GenerateArgs) -> String {
         parts.push("--listener-z-m".to_string());
         parts.push(format!("{v}"));
     }
-    parts.push("--channels".to_string());
-    parts.push(shell_quote(channel_arg_value(args.channels)));
+    if let Some(ch) = args.channels {
+        parts.push("--channels".to_string());
+        parts.push(shell_quote(channel_arg_value(ch)));
+    } else if args.layout_json.is_some() {
+        parts.push("--channels".to_string());
+        parts.push("custom".to_string());
+    }
     parts.push("--output".to_string());
     parts.push(shell_quote(&args.output.display().to_string()));
     parts.join(" ")
@@ -342,6 +355,20 @@ fn channel_arg_value(arg: ChannelFormatArg) -> &'static str {
         ChannelFormatArg::Atmos7_1_4 => "7.1.4",
         ChannelFormatArg::Atmos7_2_4 => "7.2.4",
         ChannelFormatArg::Custom => "custom",
+    }
+}
+
+fn resolve_custom_layout_intent(
+    channels: Option<ChannelFormatArg>,
+    has_layout_json: bool,
+) -> Result<bool> {
+    match (channels, has_layout_json) {
+        (Some(ChannelFormatArg::Custom), true) => Ok(true),
+        (Some(ChannelFormatArg::Custom), false) => Ok(true),
+        (Some(_), true) => anyhow::bail!("--layout-json is only valid with --channels custom"),
+        (Some(_), false) => Ok(false),
+        (None, true) => Ok(true),
+        (None, false) => Ok(false),
     }
 }
 

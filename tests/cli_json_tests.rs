@@ -347,6 +347,46 @@ fn generate_supports_cartesian_only_custom_layout() {
 }
 
 #[test]
+fn generate_allows_layout_json_without_explicit_channels_flag() {
+    let dir = tempdir().expect("tempdir");
+    let ir_path = dir.path().join("layout_only.wav");
+    let meta_path = dir.path().join("layout_only.meta.json");
+    let layout_path = dir.path().join("layout.json");
+
+    let layout = r#"{
+  "schema_version": "latent-ir.layout.v1",
+  "layout_name": "layout_only_quad",
+  "spatial_encoding": "discrete",
+  "channels": [
+    {"label":"F","azimuth_deg":0,"elevation_deg":0},
+    {"label":"R","azimuth_deg":180,"elevation_deg":0},
+    {"label":"L","azimuth_deg":-90,"elevation_deg":0},
+    {"label":"Rt","azimuth_deg":90,"elevation_deg":0}
+  ]
+}"#;
+    std::fs::write(&layout_path, layout).expect("write layout");
+
+    let cli = Cli::try_parse_from([
+        "latent-ir",
+        "generate",
+        "--prompt",
+        "layout-only test",
+        "--layout-json",
+        layout_path.to_str().expect("utf8"),
+        "--output",
+        ir_path.to_str().expect("utf8"),
+        "--metadata-out",
+        meta_path.to_str().expect("utf8"),
+    ])
+    .expect("parse");
+    dispatch(cli).expect("generate should succeed");
+
+    let meta: Value = serde_json::from_str(&std::fs::read_to_string(&meta_path).unwrap()).unwrap();
+    assert_eq!(meta["channel_format"], "layout_only_quad");
+    assert_eq!(meta["analysis"]["channels"], 4);
+}
+
+#[test]
 fn generate_rejects_inconsistent_polar_and_cartesian_layout() {
     let dir = tempdir().expect("tempdir");
     let ir_path = dir.path().join("bad.wav");
@@ -449,6 +489,30 @@ fn generate_rejects_partial_virtual_position_triplets() {
     assert!(err
         .to_string()
         .contains("source position requires all three coordinates"));
+}
+
+#[test]
+fn generate_prompt_channel_hint_applies_when_no_channels_override() {
+    let dir = tempdir().expect("tempdir");
+    let ir_path = dir.path().join("hint.wav");
+    let meta_path = dir.path().join("hint.meta.json");
+
+    let cli = Cli::try_parse_from([
+        "latent-ir",
+        "generate",
+        "--prompt",
+        "massive bunker in 7.2.4",
+        "--output",
+        ir_path.to_str().expect("utf8"),
+        "--metadata-out",
+        meta_path.to_str().expect("utf8"),
+    ])
+    .expect("parse");
+    dispatch(cli).expect("generate should succeed");
+
+    let meta: Value = serde_json::from_str(&std::fs::read_to_string(&meta_path).unwrap()).unwrap();
+    assert_eq!(meta["channel_format"], "atmos_7_2_4");
+    assert_eq!(meta["analysis"]["channels"], 13);
 }
 
 #[test]

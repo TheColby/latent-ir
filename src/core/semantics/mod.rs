@@ -16,15 +16,40 @@ impl SemanticResolver {
     }
 }
 
+pub fn channel_format_hint(prompt: &str) -> Option<ChannelFormat> {
+    let p = prompt.to_ascii_lowercase();
+    if p.contains("7.2.4") || p.contains("7_2_4") {
+        return Some(ChannelFormat::Atmos7_2_4);
+    }
+    if p.contains("7.1.4") || p.contains("7_1_4") {
+        return Some(ChannelFormat::Atmos7_1_4);
+    }
+    if p.contains("7.1") || p.contains("7_1") {
+        return Some(ChannelFormat::Surround7_1);
+    }
+    if p.contains("5.1") || p.contains("5_1") {
+        return Some(ChannelFormat::Surround5_1);
+    }
+
+    let tokens = tokenize_preserve_numbers(&p);
+    if tokens.iter().any(|t| t == "mono") {
+        return Some(ChannelFormat::Mono);
+    }
+    if tokens.iter().any(|t| t == "stereo") {
+        return Some(ChannelFormat::Stereo);
+    }
+    if tokens
+        .iter()
+        .any(|t| t == "foa" || t == "ambix" || t == "ambisonic")
+    {
+        return Some(ChannelFormat::FoaAmbix);
+    }
+    None
+}
+
 fn apply_phrase_rules(prompt: &str, d: &mut DescriptorSet) {
-    if prompt.contains("7.2.4") || prompt.contains("7_2_4") {
-        d.spatial.channel_format = ChannelFormat::Atmos7_2_4;
-    } else if prompt.contains("7.1.4") || prompt.contains("7_1_4") {
-        d.spatial.channel_format = ChannelFormat::Atmos7_1_4;
-    } else if prompt.contains("7.1") || prompt.contains("7_1") {
-        d.spatial.channel_format = ChannelFormat::Surround7_1;
-    } else if prompt.contains("5.1") || prompt.contains("5_1") {
-        d.spatial.channel_format = ChannelFormat::Surround5_1;
+    if let Some(fmt) = channel_format_hint(prompt) {
+        d.spatial.channel_format = fmt;
     }
 
     if prompt.contains("grain silo") || prompt.contains("silo") {
@@ -123,15 +148,6 @@ fn apply_token_rules(tokens: &[String], d: &mut DescriptorSet) {
             "bright" => {
                 d.spectral.brightness += 0.2;
                 d.spectral.hf_damping -= 0.15;
-            }
-            "mono" => {
-                d.spatial.channel_format = ChannelFormat::Mono;
-            }
-            "stereo" => {
-                d.spatial.channel_format = ChannelFormat::Stereo;
-            }
-            "foa" | "ambix" | "ambisonic" => {
-                d.spatial.channel_format = ChannelFormat::FoaAmbix;
             }
             "massive" | "colossal" | "vast" | "huge" | "cavernous" => {
                 d.time.t60 += 1.8;

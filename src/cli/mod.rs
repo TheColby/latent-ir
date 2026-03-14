@@ -181,9 +181,11 @@ pub struct GenerateArgs {
     #[arg(long)]
     pub channel_map_out: Option<PathBuf>,
 
-    /// Output channel format (`mono`, `stereo`, `foa`, `5.1`, `7.1`, `7.1.4`, `7.2.4`, `custom`).
-    #[arg(long, value_enum, default_value_t = ChannelFormatArg::Stereo)]
-    pub channels: ChannelFormatArg,
+    /// Optional output channel format override (`mono`, `stereo`, `foa`, `5.1`, `7.1`, `7.1.4`, `7.2.4`, `custom`).
+    ///
+    /// If omitted, channel format comes from descriptor defaults/preset/prompt conditioning.
+    #[arg(long, value_enum)]
+    pub channels: Option<ChannelFormatArg>,
 }
 
 #[derive(Debug, Clone, Args)]

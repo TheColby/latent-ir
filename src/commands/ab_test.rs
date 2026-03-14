@@ -218,6 +218,6 @@ fn build_generate_args(
         macro_trajectory: args.macro_trajectory.clone(),
         layout_json: args.layout_json.clone(),
         channel_map_out: None,
-        channels: args.channels,
+        channels: Some(args.channels),
     }
 }
