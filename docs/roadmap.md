@@ -45,6 +45,11 @@ Delivered so far:
 - analysis tail diagnostics (`tail_reaches_minus60db_s`, `tail_margin_to_end_s`) and crest-factor reporting
 - reproducibility hashes in generation metadata (`ir_sha256`, `descriptor_sha256`, `channel_map_sha256`)
 - quality-gate profiles for `generate`/`analyze` (`lenient`, `launch`, `strict`)
+- `dataset synthesize` command for AI corpus generation + augmentation controls
+  - prompt-bank sampling
+  - preset mixing + descriptor jitter
+  - optional training JSON exports (`training_text.json`, `training_audio.json`)
+  - dataset manifest (`latent-ir.dataset.v1`)
 
 Remaining high-impact items for v0.3:
 
@@ -64,5 +69,6 @@ Remaining high-impact items for v0.3:
 
 1. Latent-ready conditioning contracts (`LatentVector` APIs)
 2. Confidence/uncertainty propagation in metadata and eval outputs
-3. Trajectory-conditioned morph/generation controls
-4. Larger spatial benchmark suites + trend dashboards
+3. Dataset split/version tooling (`train/val/test` manifests + hash-locked splits)
+4. Trajectory-conditioned morph/generation controls
+5. Larger spatial benchmark suites + trend dashboards

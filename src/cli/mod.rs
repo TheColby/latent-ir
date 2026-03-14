@@ -29,6 +29,8 @@ pub enum Commands {
     Eval(EvalArgs),
     /// Benchmark models/pipelines and emit regression-friendly reports.
     Benchmark(BenchmarkArgs),
+    /// Generate reproducible datasets for AI research and augmentation workflows.
+    Dataset(DatasetArgs),
     /// Validate model manifests and runtime compatibility.
     Model(ModelArgs),
     /// Run one-shot A/B generation + analysis (industrial model vs baseline).
@@ -439,6 +441,76 @@ pub struct EvalCheckArgs {
 pub struct BenchmarkArgs {
     #[command(subcommand)]
     pub mode: BenchmarkMode,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct DatasetArgs {
+    #[command(subcommand)]
+    pub mode: DatasetMode,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub enum DatasetMode {
+    /// Synthesize a labeled IR dataset (WAV + metadata + analysis + optional training JSON exports).
+    Synthesize(DatasetSynthesizeArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct DatasetSynthesizeArgs {
+    /// Output dataset directory.
+    #[arg(long)]
+    pub out_dir: PathBuf,
+    /// Number of examples to synthesize.
+    #[arg(long, default_value_t = 128)]
+    pub count: usize,
+    /// Deterministic base seed.
+    #[arg(long, default_value_t = 4242)]
+    pub seed: u64,
+    /// Sample rate used for all generated IRs.
+    #[arg(long, default_value_t = 48_000)]
+    pub sample_rate: u32,
+    /// Channel format for dataset generation.
+    #[arg(long, value_enum, default_value_t = ChannelFormatArg::Stereo)]
+    pub channels: ChannelFormatArg,
+    /// Minimum sampled IR duration in seconds.
+    #[arg(long, default_value_t = 0.8)]
+    pub duration_min: f32,
+    /// Maximum sampled IR duration in seconds.
+    #[arg(long, default_value_t = 8.0)]
+    pub duration_max: f32,
+    /// Minimum sampled T60 in seconds.
+    #[arg(long, default_value_t = 0.6)]
+    pub t60_min: f32,
+    /// Maximum sampled T60 in seconds.
+    #[arg(long, default_value_t = 12.0)]
+    pub t60_max: f32,
+    /// Maximum sampled predelay in milliseconds.
+    #[arg(long, default_value_t = 90.0)]
+    pub predelay_max_ms: f32,
+    /// Random override jitter strength for selected descriptors [0,1].
+    #[arg(long, default_value_t = 0.2)]
+    pub jitter: f32,
+    /// Probability of drawing a built-in preset before prompt conditioning [0,1].
+    #[arg(long, default_value_t = 0.5)]
+    pub preset_mix: f32,
+    /// Optional prompt-bank JSON path (array of strings).
+    #[arg(long)]
+    pub prompt_bank_json: Option<PathBuf>,
+    /// Optional explicit output tail taper in milliseconds.
+    #[arg(long)]
+    pub tail_fade_ms: Option<f32>,
+    /// Apply generation quality gate per sample.
+    #[arg(long, default_value_t = false)]
+    pub quality_gate: bool,
+    /// Quality profile used when `--quality-gate` is enabled.
+    #[arg(long, value_enum, default_value_t = QualityProfileArg::Launch)]
+    pub quality_profile: QualityProfileArg,
+    /// Export training datasets compatible with `train-encoder`.
+    #[arg(long, default_value_t = false)]
+    pub export_training_json: bool,
+    /// Maximum tolerated failed samples before aborting.
+    #[arg(long, default_value_t = 8)]
+    pub max_failures: usize,
 }
 
 #[derive(Debug, Clone, Subcommand)]

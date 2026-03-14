@@ -32,8 +32,9 @@ Most reverb workflows are static: fixed presets, fixed measured IR libraries, or
 
 ## Feature Snapshot
 
-- Commands: `generate`, `analyze`, `morph`, `render`, `sample`, `preset`
+- Commands: `generate`, `analyze`, `morph`, `render`, `sample`, `preset`, `dataset`
 - Learned tooling: `train-encoder`, `eval`, `benchmark`, `model validate`, `ab-test`
+- AI research tooling: `dataset synth` for reproducible corpus generation + training JSON exports
 - Canonical descriptor model (`DescriptorSet`) across time/spectral/structural/spatial domains
 - Deterministic procedural IR generation with seed control
 - Tail-protection guardrail in `generate` (opt out with `--allow-tail-truncation`)
@@ -151,6 +152,17 @@ Render:
 cargo run -- render dry_input.wav --ir out/morphed.wav --mix 0.25 --output out/rendered.wav
 ```
 
+Dataset synthesis for encoder research / augmentation:
+
+```bash
+cargo run -- dataset synthesize \
+  --out-dir out/research_dataset \
+  --count 256 \
+  --channels stereo \
+  --quality-gate --quality-profile launch \
+  --export-training-json
+```
+
 ## Spatial Examples
 
 FOA (ambiX):
@@ -224,6 +236,10 @@ Metadata includes:
   - supports `--auto-resample --resample-mode linear|cubic` when IR sample rates differ
 - `render`
   - supports `--auto-resample --resample-mode linear|cubic` and workload-aware engine selection
+- `dataset synthesize`
+  - generates IR corpora (WAV + metadata + analysis + channel maps)
+  - supports prompt-bank control, descriptor jitter, preset mixing, and optional quality gating
+  - can export `training_text.json` and `training_audio.json` compatible with `train-encoder`
 
 ## Top 5 Likely Complaints (And What Is Implemented)
 
@@ -265,6 +281,7 @@ Generate deterministic launch/demo assets:
 - [docs/learned-encoders.md](docs/learned-encoders.md)
 - [docs/model-manifests.md](docs/model-manifests.md)
 - [docs/benchmarking.md](docs/benchmarking.md)
+- [docs/datasets.md](docs/datasets.md)
 - [docs/launch-readiness.md](docs/launch-readiness.md)
 - [docs/roadmap.md](docs/roadmap.md)
 

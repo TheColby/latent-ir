@@ -5,6 +5,7 @@ use crate::cli::{Cli, Commands};
 mod ab_test;
 mod analyze;
 mod benchmark;
+mod dataset;
 mod eval;
 mod generate;
 mod model;
@@ -25,6 +26,7 @@ pub fn dispatch(cli: Cli) -> Result<()> {
         Commands::TrainEncoder(args) => train_encoder::run(args),
         Commands::Eval(args) => eval::run(args),
         Commands::Benchmark(args) => benchmark::run(args),
+        Commands::Dataset(args) => dataset::run(args),
         Commands::Model(args) => model::run(args),
         Commands::AbTest(args) => ab_test::run(args),
     }

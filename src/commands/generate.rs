@@ -192,7 +192,9 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         generator.generate(&descriptor, args.seed)?
     };
     if let Some(tail_fade_ms) = args.tail_fade_ms {
-        if let Some(w) = apply_tail_fade(&mut generated.channels, args.sample_rate, tail_fade_ms) {
+        if let Some(w) =
+            util::audio::apply_tail_fade(&mut generated.channels, args.sample_rate, tail_fade_ms)
+        {
             runtime_warnings.push(w);
         }
     }
@@ -611,56 +613,6 @@ fn apply_duration_floor(
             original, recommended
         ));
     }
-}
-
-fn apply_tail_fade(
-    channels: &mut [Vec<f32>],
-    sample_rate: u32,
-    tail_fade_ms: f32,
-) -> Option<String> {
-    if channels.is_empty() || tail_fade_ms <= 0.0 {
-        return None;
-    }
-    let max_len = channels.iter().map(Vec::len).max().unwrap_or(0);
-    if max_len <= 1 {
-        for ch in channels {
-            if let Some(s) = ch.last_mut() {
-                *s = 0.0;
-            }
-        }
-        return Some(
-            "tail fade requested on near-empty IR; forcing final sample to zero".to_string(),
-        );
-    }
-
-    let mut fade_n = (tail_fade_ms * 0.001 * sample_rate as f32).round() as usize;
-    if fade_n < 2 {
-        fade_n = 2;
-    }
-    let mut warning = None;
-    if fade_n > max_len {
-        fade_n = max_len;
-        warning = Some(format!(
-            "tail fade {:.2}ms exceeds IR length; clamped to full length",
-            tail_fade_ms
-        ));
-    }
-
-    for ch in channels {
-        let n = ch.len();
-        if n == 0 {
-            continue;
-        }
-        let start = n.saturating_sub(fade_n);
-        let denom = (n - start - 1).max(1) as f32;
-        for i in start..n {
-            let t = (i - start) as f32 / denom;
-            let gain = 0.5 * (1.0 + (std::f32::consts::PI * t).cos());
-            ch[i] *= gain;
-        }
-        ch[n - 1] = 0.0;
-    }
-    warning
 }
 
 fn channel_format_from_arg(arg: ChannelFormatArg) -> ChannelFormat {

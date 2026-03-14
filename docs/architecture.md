@@ -125,6 +125,7 @@ Artifacts:
 - generation metadata JSON (`latent-ir.generation.v1`)
 - analysis JSON (`latent-ir.analysis.v1`)
 - channel map JSON (`latent-ir.channel-map.v1`)
+- dataset manifest JSON (`latent-ir.dataset.v1`) for corpus workflows
 
 Generation metadata includes:
 - replay command string
@@ -139,6 +140,17 @@ Quality gates:
 - available in `generate` and `analyze`
 - profiles: `lenient`, `launch`, `strict`
 - designed for deterministic CI/release checks (non-zero exit on failure)
+
+## AI Research / Augmentation Pipeline
+
+`dataset synthesize` orchestrates repeated generation runs with controlled randomization:
+- prompt bank sampling
+- preset mixture control
+- descriptor jitter
+- bounded duration/T60/predelay sampling
+- optional per-sample quality-gate evaluation
+
+Outputs can include `training_text.json` and `training_audio.json` compatible with `train-encoder`.
 
 Channel-format selection precedence during generation:
 1. explicit `--channels` override

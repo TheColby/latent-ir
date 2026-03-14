@@ -1,6 +1,7 @@
 pub mod analysis;
 pub mod benchmark;
 pub mod conditioning;
+pub mod dataset;
 pub mod descriptors;
 pub mod eval;
 pub mod generator;
