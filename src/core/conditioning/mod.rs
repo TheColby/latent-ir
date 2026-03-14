@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
@@ -112,6 +112,31 @@ impl DescriptorDelta {
             decorrelation: v[18],
             asymmetry: v[19],
         })
+    }
+
+    pub fn to_vector(&self) -> [f32; 20] {
+        [
+            self.duration,
+            self.predelay_ms,
+            self.t60,
+            self.edt,
+            self.brightness,
+            self.hf_damping,
+            self.lf_bloom,
+            self.spectral_tilt,
+            self.band_decay_low,
+            self.band_decay_mid,
+            self.band_decay_high,
+            self.early_density,
+            self.late_density,
+            self.diffusion,
+            self.modal_density,
+            self.tail_noise,
+            self.grain,
+            self.width,
+            self.decorrelation,
+            self.asymmetry,
+        ]
     }
 }
 
@@ -803,6 +828,15 @@ pub struct ConditioningChainResult {
     pub by_model: Vec<(String, DescriptorDelta)>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ConditioningUncertainty {
+    pub active_models: usize,
+    pub agreement_score: f32,
+    pub overall_confidence: f32,
+    pub overall_uncertainty: f32,
+    pub per_field_confidence: BTreeMap<String, f32>,
+}
+
 pub fn run_conditioning_chain(
     models: &[Box<dyn ConditioningModel>],
     ctx: &ConditioningContext,
@@ -815,6 +849,108 @@ pub fn run_conditioning_chain(
         }
     }
     Ok(out)
+}
+
+pub fn estimate_conditioning_uncertainty(
+    by_model: &[(String, DescriptorDelta)],
+) -> Option<ConditioningUncertainty> {
+    if by_model.is_empty() {
+        return None;
+    }
+
+    let vectors: Vec<[f32; 20]> = by_model.iter().map(|(_, d)| d.to_vector()).collect();
+    let names = descriptor_field_names();
+    let mut per_field_confidence = BTreeMap::new();
+
+    for (k, name) in names.iter().enumerate() {
+        let mut mean = 0.0f32;
+        for v in &vectors {
+            mean += v[k];
+        }
+        mean /= vectors.len() as f32;
+        let mut var = 0.0f32;
+        for v in &vectors {
+            let d = v[k] - mean;
+            var += d * d;
+        }
+        var /= vectors.len() as f32;
+        let std = var.sqrt();
+        let norm = std / (mean.abs() + 0.05);
+        let confidence = (1.0 / (1.0 + norm)).clamp(0.0, 1.0);
+        per_field_confidence.insert((*name).to_string(), confidence);
+    }
+
+    let agreement_score = if vectors.len() < 2 {
+        0.65
+    } else {
+        let mut acc = 0.0f32;
+        let mut n = 0usize;
+        for i in 0..vectors.len() {
+            for j in (i + 1)..vectors.len() {
+                acc += cosine_similarity(&vectors[i], &vectors[j]);
+                n += 1;
+            }
+        }
+        if n == 0 {
+            0.65
+        } else {
+            ((acc / n as f32) * 0.5 + 0.5).clamp(0.0, 1.0)
+        }
+    };
+
+    let mean_field_confidence =
+        per_field_confidence.values().copied().sum::<f32>() / per_field_confidence.len() as f32;
+    let overall_confidence = (0.7 * mean_field_confidence + 0.3 * agreement_score).clamp(0.0, 1.0);
+    let overall_uncertainty = (1.0 - overall_confidence).clamp(0.0, 1.0);
+
+    Some(ConditioningUncertainty {
+        active_models: by_model.len(),
+        agreement_score,
+        overall_confidence,
+        overall_uncertainty,
+        per_field_confidence,
+    })
+}
+
+fn cosine_similarity(a: &[f32; 20], b: &[f32; 20]) -> f32 {
+    let mut dot = 0.0f32;
+    let mut na = 0.0f32;
+    let mut nb = 0.0f32;
+    for i in 0..20 {
+        dot += a[i] * b[i];
+        na += a[i] * a[i];
+        nb += b[i] * b[i];
+    }
+    if na <= 1e-12 || nb <= 1e-12 {
+        0.0
+    } else {
+        dot / (na.sqrt() * nb.sqrt())
+    }
+}
+
+fn descriptor_field_names() -> [&'static str; 20] {
+    [
+        "duration",
+        "predelay_ms",
+        "t60",
+        "edt",
+        "brightness",
+        "hf_damping",
+        "lf_bloom",
+        "spectral_tilt",
+        "band_decay_low",
+        "band_decay_mid",
+        "band_decay_high",
+        "early_density",
+        "late_density",
+        "diffusion",
+        "modal_density",
+        "tail_noise",
+        "grain",
+        "width",
+        "decorrelation",
+        "asymmetry",
+    ]
 }
 
 fn delta_between(base: &DescriptorSet, out: &DescriptorSet) -> DescriptorDelta {

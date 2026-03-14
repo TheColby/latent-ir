@@ -24,6 +24,8 @@ pub struct BaselineReport {
     pub sample_count: usize,
     pub descriptor_metrics: DescriptorMetrics,
     pub analysis_metrics: AnalysisMetrics,
+    #[serde(default)]
+    pub uncertainty_metrics: UncertaintyMetrics,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,6 +40,13 @@ pub struct AnalysisMetrics {
     pub mae: f32,
     pub rmse: f32,
     pub per_metric_mae: BTreeMap<String, f32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct UncertaintyMetrics {
+    pub mean_confidence: f32,
+    pub mean_uncertainty: f32,
+    pub per_field_confidence: BTreeMap<String, f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,6 +77,7 @@ pub fn evaluate_text(
     let targets: Vec<DescriptorSet> = samples.iter().map(|s| s.descriptor.clone()).collect();
     let descriptor_metrics = descriptor_metrics(&predicted, &targets);
     let analysis_metrics = analysis_metrics(&predicted, &targets, sample_rate, seed)?;
+    let uncertainty_metrics = uncertainty_metrics(&predicted, &targets);
 
     Ok(BaselineReport {
         schema_version: "latent-ir.eval.baseline.v1".to_string(),
@@ -78,6 +88,7 @@ pub fn evaluate_text(
         sample_count: samples.len(),
         descriptor_metrics,
         analysis_metrics,
+        uncertainty_metrics,
     })
 }
 
@@ -107,6 +118,7 @@ pub fn evaluate_audio(
     let targets: Vec<DescriptorSet> = samples.iter().map(|s| s.descriptor.clone()).collect();
     let descriptor_metrics = descriptor_metrics(&predicted, &targets);
     let analysis_metrics = analysis_metrics(&predicted, &targets, sample_rate, seed)?;
+    let uncertainty_metrics = uncertainty_metrics(&predicted, &targets);
 
     Ok(BaselineReport {
         schema_version: "latent-ir.eval.baseline.v1".to_string(),
@@ -117,6 +129,7 @@ pub fn evaluate_audio(
         sample_count: samples.len(),
         descriptor_metrics,
         analysis_metrics,
+        uncertainty_metrics,
     })
 }
 
@@ -151,6 +164,13 @@ pub fn check_eval(
         "analysis_metrics.rmse",
         report.analysis_metrics.rmse,
         baseline.analysis_metrics.rmse,
+        max_regression,
+        &mut regressions,
+    );
+    check_metric(
+        "uncertainty_metrics.mean_uncertainty",
+        report.uncertainty_metrics.mean_uncertainty,
+        baseline.uncertainty_metrics.mean_uncertainty,
         max_regression,
         &mut regressions,
     );
@@ -366,6 +386,36 @@ fn analysis_metric_names() -> [&'static str; 11] {
         "early_energy_ratio",
         "late_energy_ratio",
     ]
+}
+
+fn uncertainty_metrics(pred: &[DescriptorSet], tgt: &[DescriptorSet]) -> UncertaintyMetrics {
+    let names = descriptor_field_names();
+    let mut sums = vec![0.0f32; names.len()];
+    let mut n = 0usize;
+
+    for (p, t) in pred.iter().zip(tgt.iter()) {
+        let pv = descriptor_to_vec(p);
+        let tv = descriptor_to_vec(t);
+        for i in 0..pv.len() {
+            let abs_err = (pv[i] - tv[i]).abs();
+            let conf = (1.0 / (1.0 + abs_err / (tv[i].abs() + 0.05))).clamp(0.0, 1.0);
+            sums[i] += conf;
+        }
+        n += 1;
+    }
+
+    let denom = n.max(1) as f32;
+    let mut per_field_confidence = BTreeMap::new();
+    for (i, name) in names.iter().enumerate() {
+        per_field_confidence.insert((*name).to_string(), sums[i] / denom);
+    }
+    let mean_confidence = per_field_confidence.values().copied().sum::<f32>()
+        / per_field_confidence.len().max(1) as f32;
+    UncertaintyMetrics {
+        mean_confidence,
+        mean_uncertainty: (1.0 - mean_confidence).clamp(0.0, 1.0),
+        per_field_confidence,
+    }
 }
 
 fn check_metric(

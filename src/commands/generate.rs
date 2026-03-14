@@ -4,9 +4,10 @@ use chrono::Utc;
 use crate::cli::{ChannelFormatArg, GenerateArgs, QualityProfileArg};
 use crate::core::analysis::{evaluate_quality_gate, AnalysisReport, IrAnalyzer, QualityProfile};
 use crate::core::conditioning::{
-    run_conditioning_chain, ConditioningContext, ConditioningModel, DescriptorDelta,
-    JsonAudioConditioningModel, JsonTextConditioningModel, LearnedAudioEncoder, LearnedTextEncoder,
-    OnnxAudioConditioningModel, OnnxTextConditioningModel, SemanticConditioningModel,
+    estimate_conditioning_uncertainty, run_conditioning_chain, ConditioningContext,
+    ConditioningModel, DescriptorDelta, JsonAudioConditioningModel, JsonTextConditioningModel,
+    LearnedAudioEncoder, LearnedTextEncoder, OnnxAudioConditioningModel, OnnxTextConditioningModel,
+    SemanticConditioningModel,
 };
 use crate::core::descriptors::{CartesianPosition, ChannelFormat, DescriptorSet};
 use crate::core::generator::{generate_with_macro_trajectory, IrGenerator, ProceduralIrGenerator};
@@ -75,6 +76,7 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         text_onnx_input_dim: args.text_encoder_onnx_input_dim,
     };
     let chain_out = run_conditioning_chain(&chain, &ctx)?;
+    conditioning.uncertainty = estimate_conditioning_uncertainty(&chain_out.by_model);
     let combined_delta = chain_out.total_delta.clone();
     combined_delta.apply_to(&mut descriptor, 1.0);
     conditioning.combined_delta = Some(combined_delta);
@@ -468,6 +470,34 @@ fn print_conditioning_summary(c: &ConditioningTrace) {
     print_delta("combined_delta", c.combined_delta.as_ref());
     print_delta("text_delta", c.text_delta.as_ref());
     print_delta("audio_delta", c.audio_delta.as_ref());
+    if let Some(u) = c.uncertainty.as_ref() {
+        println!(
+            "{}",
+            util::console::metric(
+                "conditioning_confidence",
+                format!("{:.3}", u.overall_confidence)
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "conditioning_uncertainty",
+                format!("{:.3}", u.overall_uncertainty)
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "conditioning_agreement",
+                format!("{:.3}", u.agreement_score)
+            )
+        );
+    } else {
+        println!(
+            "{}",
+            util::console::metric("conditioning_confidence", "n/a")
+        );
+    }
     println!("{}", util::console::section("----------------------------"));
 }
 

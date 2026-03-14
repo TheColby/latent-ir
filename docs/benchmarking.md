@@ -9,6 +9,7 @@
 - `eval check`
 - `benchmark run`
 - `benchmark check`
+- `benchmark trend`
 - spatial corpus tests
 - streaming render QA tests
 
@@ -16,7 +17,7 @@
 
 - `eval text` / `eval audio`
   - evaluates learned conditioning quality against labeled datasets
-  - emits baseline-friendly reports
+  - emits baseline-friendly reports including uncertainty summaries
 - `eval check`
   - compares new eval report to committed baseline
   - fails on configured regressions
@@ -25,6 +26,9 @@
   - emits objective/proxy/speed metrics
 - `benchmark check`
   - compares benchmark report against baseline thresholds
+- `benchmark trend`
+  - consumes multiple benchmark reports
+  - emits Markdown + JSON trend dashboards
 
 ## Dataset Schema
 
@@ -61,6 +65,11 @@ cargo run -- benchmark run \
   --audio-model models/audio_encoder_v1.json \
   --repeats 3 \
   --output reports/benchmark.json
+
+cargo run -- benchmark trend \
+  --reports reports/benchmark_2026_03_10.json \
+  --reports reports/benchmark_2026_03_17.json \
+  --output reports/benchmark_trend.md
 ```
 
 ## Regression Gate Examples
@@ -87,6 +96,8 @@ Harness:
 
 Coverage includes:
 - 7.2.4 beds
+- 7.1 beds
+- FOA references
 - custom 16-channel rings
 - custom A.B.C-style elevated layouts
 - cartesian-only custom ingestion

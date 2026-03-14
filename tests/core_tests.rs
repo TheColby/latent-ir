@@ -5,7 +5,7 @@ use latent_ir::core::descriptors::{
     SpatialEncoding,
 };
 use latent_ir::core::generator::{IrGenerator, ProceduralIrGenerator};
-use latent_ir::core::morph::IrMorpher;
+use latent_ir::core::morph::{AlphaKeyframe, AlphaTrajectory, IrMorpher};
 use latent_ir::core::presets;
 use latent_ir::core::render::{RenderEngine, RenderOptions, Renderer};
 use latent_ir::core::semantics::SemanticResolver;
@@ -396,6 +396,23 @@ fn morph_endpoints_hold() {
     let m1 = morpher.morph(&a, &b, 1.0);
     assert_relative_eq!(m0[0][0], 0.98, epsilon = 1e-6);
     assert_relative_eq!(m1[0][1], 0.98, epsilon = 1e-6);
+}
+
+#[test]
+fn morph_trajectory_varies_alpha_over_time() {
+    let a = vec![vec![1.0f32, 0.0, 0.0, 0.0, 0.0]];
+    let b = vec![vec![0.0f32, 0.0, 0.0, 0.0, 1.0]];
+    let morpher = IrMorpher;
+    let traj = AlphaTrajectory {
+        keyframes: vec![
+            AlphaKeyframe { t: 0.0, alpha: 0.0 },
+            AlphaKeyframe { t: 1.0, alpha: 1.0 },
+        ],
+    };
+    let out = morpher.morph_with_trajectory(&a, &b, &traj);
+    assert!(out[0][0] > 0.8);
+    assert!(out[0][4] > 0.8);
+    assert!(out[0][2] < 0.3);
 }
 
 #[test]

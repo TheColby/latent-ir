@@ -50,12 +50,23 @@ Delivered so far:
   - preset mixing + descriptor jitter
   - optional training JSON exports (`training_text.json`, `training_audio.json`)
   - dataset manifest (`latent-ir.dataset.v1`)
+- dataset split/version tooling
+  - deterministic train/val/test split manifests (`latent-ir.dataset-split.v1`)
+  - optional hash-locking with per-sample metadata hashes
+  - optional split-specific train-encoder JSON exports
+- conditioning confidence/uncertainty propagation
+  - generation metadata includes conditioning uncertainty summaries
+  - eval reports include uncertainty metrics (`mean_confidence`, `mean_uncertainty`)
+- trajectory-conditioned morph controls
+  - `morph --alpha-trajectory` supports time-varying blend envelopes
+- benchmark trend dashboards + spatial benchmark expansion
+  - `benchmark trend` emits Markdown + JSON trend artifacts
+  - spatial corpus now includes FOA and 7.1 envelope coverage
 
 Remaining high-impact items for v0.3:
 
 - latent-vector projection contracts and constrained priors
-- conditioning confidence/uncertainty reporting
-- descriptor trajectory-coupled morphing
+- trajectory-conditioned generation beyond macro control
 
 ## v1.0 Research/Product Grade
 
@@ -68,7 +79,7 @@ Remaining high-impact items for v0.3:
 ## Next Focus (Recommended)
 
 1. Latent-ready conditioning contracts (`LatentVector` APIs)
-2. Confidence/uncertainty propagation in metadata and eval outputs
-3. Dataset split/version tooling (`train/val/test` manifests + hash-locked splits)
-4. Trajectory-conditioned morph/generation controls
-5. Larger spatial benchmark suites + trend dashboards
+2. Dataset curation tooling (`dedupe`, stratification, provenance audit)
+3. Trajectory-conditioned generation beyond macro trajectories
+4. External metrology cross-validation for analysis metrics
+5. Render-kernel performance optimization for very large multichannel jobs

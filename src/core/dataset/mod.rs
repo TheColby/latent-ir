@@ -60,3 +60,48 @@ pub struct DatasetRecord {
     pub decay_db_span: f32,
     pub quality_gate_passed: Option<bool>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatasetSplitManifest {
+    pub schema_version: String,
+    pub project: String,
+    pub version: String,
+    pub generated_at_utc: DateTime<Utc>,
+    pub source_manifest_path: String,
+    pub source_manifest_sha256: String,
+    pub split_seed: u64,
+    pub ratios: DatasetSplitRatios,
+    pub counts: DatasetSplitCounts,
+    pub hash_locked: bool,
+    pub train: Vec<DatasetSplitRecord>,
+    pub val: Vec<DatasetSplitRecord>,
+    pub test: Vec<DatasetSplitRecord>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatasetSplitRatios {
+    pub train: f32,
+    pub val: f32,
+    pub test: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatasetSplitCounts {
+    pub total: usize,
+    pub train: usize,
+    pub val: usize,
+    pub test: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatasetSplitRecord {
+    pub id: String,
+    pub prompt: String,
+    pub ir_wav: String,
+    pub metadata_json: String,
+    pub analysis_json: String,
+    pub descriptor: DescriptorSet,
+    pub ir_sha256: Option<String>,
+    pub descriptor_sha256: Option<String>,
+    pub channel_map_sha256: Option<String>,
+}

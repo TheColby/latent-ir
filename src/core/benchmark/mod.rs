@@ -88,6 +88,35 @@ pub struct BenchmarkCheckResult {
     pub regressions: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BenchmarkTrendReport {
+    pub schema_version: String,
+    pub generated_at_utc: DateTime<Utc>,
+    pub points: Vec<BenchmarkTrendPoint>,
+    pub summary: BenchmarkTrendSummary,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BenchmarkTrendPoint {
+    pub label: String,
+    pub generated_at_utc: DateTime<Utc>,
+    pub total_score: f32,
+    pub objective_score: f32,
+    pub speed_score: f32,
+    pub stability_score: f32,
+    pub perceptual_score: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BenchmarkTrendSummary {
+    pub point_count: usize,
+    pub best_total_score: f32,
+    pub worst_total_score: f32,
+    pub latest_total_score: f32,
+    pub delta_from_first: f32,
+    pub relative_delta_from_first: f32,
+}
+
 #[derive(Debug, Clone)]
 pub struct BenchmarkRunConfig {
     pub dataset_path: PathBuf,
@@ -308,6 +337,80 @@ pub fn check_benchmark(
         max_regression,
         regressions,
     }
+}
+
+pub fn build_trend_report(reports: &[(String, BenchmarkReport)]) -> BenchmarkTrendReport {
+    let mut points = Vec::with_capacity(reports.len());
+    for (label, r) in reports {
+        points.push(BenchmarkTrendPoint {
+            label: label.clone(),
+            generated_at_utc: r.generated_at_utc,
+            total_score: r.summary.total_score,
+            objective_score: r.summary.objective_score,
+            speed_score: r.summary.speed_score,
+            stability_score: r.summary.stability_score,
+            perceptual_score: r.summary.perceptual_score,
+        });
+    }
+
+    let first = points.first().map(|p| p.total_score).unwrap_or(0.0);
+    let latest = points.last().map(|p| p.total_score).unwrap_or(0.0);
+    let best = points
+        .iter()
+        .map(|p| p.total_score)
+        .fold(f32::INFINITY, f32::min);
+    let worst = points
+        .iter()
+        .map(|p| p.total_score)
+        .fold(f32::NEG_INFINITY, f32::max);
+    let delta = latest - first;
+    let rel = if first.abs() <= 1e-9 {
+        0.0
+    } else {
+        delta / first.abs()
+    };
+
+    BenchmarkTrendReport {
+        schema_version: "latent-ir.benchmark.trend.v1".to_string(),
+        generated_at_utc: Utc::now(),
+        points,
+        summary: BenchmarkTrendSummary {
+            point_count: reports.len(),
+            best_total_score: if best.is_finite() { best } else { 0.0 },
+            worst_total_score: if worst.is_finite() { worst } else { 0.0 },
+            latest_total_score: latest,
+            delta_from_first: delta,
+            relative_delta_from_first: rel,
+        },
+    }
+}
+
+pub fn render_trend_markdown(report: &BenchmarkTrendReport) -> String {
+    let mut out = String::new();
+    out.push_str("# Benchmark Trend Dashboard\n\n");
+    out.push_str(&format!(
+        "- generated_at_utc: {}\n- points: {}\n- latest_total_score: {:.6}\n- delta_from_first: {:.6} ({:.2}%)\n\n",
+        report.generated_at_utc,
+        report.summary.point_count,
+        report.summary.latest_total_score,
+        report.summary.delta_from_first,
+        report.summary.relative_delta_from_first * 100.0
+    ));
+    out.push_str("| Label | Timestamp | Total | Objective | Speed | Stability | Perceptual |\n");
+    out.push_str("|---|---:|---:|---:|---:|---:|---:|\n");
+    for p in &report.points {
+        out.push_str(&format!(
+            "| {} | {} | {:.6} | {:.6} | {:.6} | {:.6} | {:.6} |\n",
+            p.label,
+            p.generated_at_utc,
+            p.total_score,
+            p.objective_score,
+            p.speed_score,
+            p.stability_score,
+            p.perceptual_score
+        ));
+    }
+    out
 }
 
 fn infer_descriptor(

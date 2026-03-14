@@ -34,7 +34,7 @@ Most reverb workflows are static: fixed presets, fixed measured IR libraries, or
 
 - Commands: `generate`, `analyze`, `morph`, `render`, `sample`, `preset`, `dataset`
 - Learned tooling: `train-encoder`, `eval`, `benchmark`, `model validate`, `ab-test`
-- AI research tooling: `dataset synth` for reproducible corpus generation + training JSON exports
+- AI research tooling: `dataset synth` / `dataset split` for reproducible corpus generation and hash-locked train/val/test splits
 - Canonical descriptor model (`DescriptorSet`) across time/spectral/structural/spatial domains
 - Deterministic procedural IR generation with seed control
 - Tail-protection guardrail in `generate` (opt out with `--allow-tail-truncation`)
@@ -56,8 +56,11 @@ Most reverb workflows are static: fixed presets, fixed measured IR libraries, or
   - inter-channel correlation + ITD/IACC-style coherence summaries
   - directional energy summaries with channel map
 - Quality gates for launch/release workflows (`--quality-gate --quality-profile lenient|launch|strict`)
+- Conditioning uncertainty estimates in metadata (`conditioning.uncertainty.*`) and eval outputs (`uncertainty_metrics.*`)
 - Render engines: `direct`, `fft-partitioned`, `fft-streaming`
 - `render` and `morph` optional sample-rate reconciliation via `--auto-resample --resample-mode linear|cubic`
+- Trajectory-conditioned morphing via `morph --alpha-trajectory <json>`
+- Benchmark trend dashboards via `benchmark trend --reports ... --output trend.md`
 - Reproducible sidecars: metadata JSON, analysis JSON, channel map JSON
 
 ## Practical Guardrails
@@ -146,6 +149,14 @@ Morph:
 cargo run -- morph cave_ir.wav plate_ir.wav --alpha 0.4 --output out/morphed.wav
 ```
 
+Trajectory-conditioned morph:
+
+```bash
+cargo run -- morph cave_ir.wav plate_ir.wav \
+  --alpha-trajectory examples/morph/alpha_ramp.json \
+  --output out/morphed_traj.wav
+```
+
 Render:
 
 ```bash
@@ -161,6 +172,16 @@ cargo run -- dataset synthesize \
   --channels stereo \
   --quality-gate --quality-profile launch \
   --export-training-json
+```
+
+Create deterministic, hash-locked train/val/test splits:
+
+```bash
+cargo run -- dataset split \
+  --manifest out/research_dataset/manifest.dataset.json \
+  --output out/research_dataset/split.dataset.json \
+  --train-ratio 0.8 --val-ratio 0.1 --test-ratio 0.1 \
+  --lock-hashes --emit-training-json
 ```
 
 ## Spatial Examples
@@ -234,12 +255,21 @@ Metadata includes:
   - optional quality gate (`--quality-gate --quality-profile ...`) for release validation
 - `morph`
   - supports `--auto-resample --resample-mode linear|cubic` when IR sample rates differ
+  - supports `--alpha-trajectory` for time-varying alpha interpolation
 - `render`
   - supports `--auto-resample --resample-mode linear|cubic` and workload-aware engine selection
 - `dataset synthesize`
   - generates IR corpora (WAV + metadata + analysis + channel maps)
   - supports prompt-bank control, descriptor jitter, preset mixing, and optional quality gating
   - can export `training_text.json` and `training_audio.json` compatible with `train-encoder`
+- `dataset split`
+  - creates deterministic train/val/test manifests with configurable ratios
+  - optional hash-locking reads per-sample metadata hashes into split records
+  - optional split-specific train-encoder JSON exports
+- `benchmark trend`
+  - builds Markdown + JSON trend dashboards from multiple benchmark reports
+- `eval text` / `eval audio`
+  - now emit uncertainty summaries (`mean_confidence`, `mean_uncertainty`)
 
 ## Top 5 Likely Complaints (And What Is Implemented)
 

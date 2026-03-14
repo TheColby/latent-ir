@@ -57,6 +57,8 @@ fn eval_text_writes_baseline_report() {
     assert_eq!(v["command"], "eval text");
     assert!(v["descriptor_metrics"]["mae"].is_number());
     assert!(v["analysis_metrics"]["mae"].is_number());
+    assert!(v["uncertainty_metrics"]["mean_confidence"].is_number());
+    assert!(v["uncertainty_metrics"]["mean_uncertainty"].is_number());
 }
 
 #[test]
@@ -130,6 +132,7 @@ fn eval_audio_writes_baseline_report() {
     assert_eq!(v["command"], "eval audio");
     assert!(v["sample_count"].as_u64().unwrap_or(0) >= 2);
     assert!(v["analysis_metrics"]["per_metric_mae"].is_object());
+    assert!(v["uncertainty_metrics"]["per_field_confidence"].is_object());
 }
 
 #[test]

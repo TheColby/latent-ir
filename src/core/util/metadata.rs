@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::core::analysis::AnalysisReport;
-use crate::core::conditioning::DescriptorDelta;
+use crate::core::conditioning::{ConditioningUncertainty, DescriptorDelta};
 use crate::core::descriptors::DescriptorSet;
 use crate::core::perceptual::MacroControls;
 
@@ -46,6 +46,7 @@ pub struct ConditioningTrace {
     pub text_delta: Option<DescriptorDelta>,
     pub audio_delta: Option<DescriptorDelta>,
     pub combined_delta: Option<DescriptorDelta>,
+    pub uncertainty: Option<ConditioningUncertainty>,
     pub macro_controls: Option<MacroControls>,
     pub macro_trajectory: Option<String>,
 }

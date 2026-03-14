@@ -126,12 +126,14 @@ Artifacts:
 - analysis JSON (`latent-ir.analysis.v1`)
 - channel map JSON (`latent-ir.channel-map.v1`)
 - dataset manifest JSON (`latent-ir.dataset.v1`) for corpus workflows
+- dataset split manifest JSON (`latent-ir.dataset-split.v1`) for train/val/test versioning
 
 Generation metadata includes:
 - replay command string
 - conditioning trace (text/audio/combined deltas)
 - reproducibility fingerprints (`ir_sha256`, `descriptor_sha256`, `channel_map_sha256`)
 - optional quality-gate result (`profile`, `passed`, failed checks)
+- conditioning uncertainty summary (agreement/confidence/uncertainty + per-field confidence)
 - warnings and embedded analysis summary
 
 `generate --explain-conditioning` provides an interactive console view of this conditioning state.
@@ -151,6 +153,17 @@ Quality gates:
 - optional per-sample quality-gate evaluation
 
 Outputs can include `training_text.json` and `training_audio.json` compatible with `train-encoder`.
+
+`dataset split` can derive deterministic train/val/test partitions with:
+- ratio control
+- seed-stable shuffle
+- optional hash-locks against per-sample metadata
+- optional split-specific training JSON exports
+
+## Trajectory Controls
+
+- Generation supports macro trajectories (`--macro-trajectory`)
+- Morphing now supports alpha trajectories (`morph --alpha-trajectory`) for time-varying blend curves
 
 Channel-format selection precedence during generation:
 1. explicit `--channels` override

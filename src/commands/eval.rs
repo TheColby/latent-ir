@@ -35,6 +35,20 @@ fn run_text(args: EvalTextArgs) -> Result<()> {
             format!("{:.6}", report.analysis_metrics.mae)
         )
     );
+    println!(
+        "{}",
+        util::console::metric(
+            "mean_confidence",
+            format!("{:.6}", report.uncertainty_metrics.mean_confidence)
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "mean_uncertainty",
+            format!("{:.6}", report.uncertainty_metrics.mean_uncertainty)
+        )
+    );
     Ok(())
 }
 
@@ -59,6 +73,20 @@ fn run_audio(args: EvalAudioArgs) -> Result<()> {
         util::console::metric(
             "analysis_mae",
             format!("{:.6}", report.analysis_metrics.mae)
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "mean_confidence",
+            format!("{:.6}", report.uncertainty_metrics.mean_confidence)
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "mean_uncertainty",
+            format!("{:.6}", report.uncertainty_metrics.mean_uncertainty)
         )
     );
     Ok(())

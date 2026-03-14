@@ -2,14 +2,18 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use chrono::Utc;
-use rand::{Rng, SeedableRng};
+use rand::{seq::SliceRandom, Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use crate::cli::{
-    ChannelFormatArg, DatasetArgs, DatasetMode, DatasetSynthesizeArgs, QualityProfileArg,
+    ChannelFormatArg, DatasetArgs, DatasetMode, DatasetSplitArgs, DatasetSynthesizeArgs,
+    QualityProfileArg,
 };
 use crate::core::analysis::{evaluate_quality_gate, IrAnalyzer, QualityProfile};
-use crate::core::dataset::{DatasetConfigSnapshot, DatasetManifest, DatasetRecord, DatasetSummary};
+use crate::core::dataset::{
+    DatasetConfigSnapshot, DatasetManifest, DatasetRecord, DatasetSplitCounts,
+    DatasetSplitManifest, DatasetSplitRatios, DatasetSplitRecord, DatasetSummary,
+};
 use crate::core::descriptors::{ChannelFormat, DescriptorSet};
 use crate::core::generator::{IrGenerator, ProceduralIrGenerator};
 use crate::core::presets;
@@ -24,6 +28,7 @@ use crate::core::util::{
 pub fn run(args: DatasetArgs) -> Result<()> {
     match args.mode {
         DatasetMode::Synthesize(cfg) => run_synthesize(cfg),
+        DatasetMode::Split(cfg) => run_split(cfg),
     }
 }
 
@@ -312,6 +317,182 @@ fn run_synthesize(args: DatasetSynthesizeArgs) -> Result<()> {
             manifest.summary.quality_gate_failures
         )
     );
+    Ok(())
+}
+
+fn run_split(args: DatasetSplitArgs) -> Result<()> {
+    validate_split_args(&args)?;
+    let text = std::fs::read_to_string(&args.manifest)
+        .with_context(|| format!("failed to read {}", args.manifest.display()))?;
+    let manifest: DatasetManifest =
+        serde_json::from_str(&text).with_context(|| "failed to parse dataset manifest JSON")?;
+
+    anyhow::ensure!(
+        !manifest.records.is_empty(),
+        "dataset manifest has no records to split"
+    );
+    let source_manifest_sha256 = util::hash::sha256_hex(text.as_bytes());
+    let root = args.manifest.parent().unwrap_or_else(|| Path::new("."));
+
+    let mut records = manifest.records.clone();
+    let mut rng = ChaCha8Rng::seed_from_u64(args.seed);
+    records.shuffle(&mut rng);
+
+    let total = records.len();
+    let train_n = ((total as f32) * args.train_ratio).round() as usize;
+    let val_n = ((total as f32) * args.val_ratio).round() as usize;
+    let train_n = train_n.min(total);
+    let val_n = val_n.min(total.saturating_sub(train_n));
+    let test_n = total.saturating_sub(train_n + val_n);
+
+    let mut train = Vec::with_capacity(train_n);
+    let mut val = Vec::with_capacity(val_n);
+    let mut test = Vec::with_capacity(test_n);
+
+    for (idx, rec) in records.iter().enumerate() {
+        let split_rec = if args.lock_hashes {
+            let meta_path = root.join(&rec.metadata_json);
+            let meta_text = std::fs::read_to_string(&meta_path)
+                .with_context(|| format!("failed to read {}", meta_path.display()))?;
+            let meta: GenerationMetadata = serde_json::from_str(&meta_text)
+                .with_context(|| format!("failed to parse {}", meta_path.display()))?;
+            DatasetSplitRecord {
+                id: rec.id.clone(),
+                prompt: rec.prompt.clone(),
+                ir_wav: rec.ir_wav.clone(),
+                metadata_json: rec.metadata_json.clone(),
+                analysis_json: rec.analysis_json.clone(),
+                descriptor: rec.descriptor.clone(),
+                ir_sha256: Some(meta.ir_sha256),
+                descriptor_sha256: Some(meta.descriptor_sha256),
+                channel_map_sha256: Some(meta.channel_map_sha256),
+            }
+        } else {
+            DatasetSplitRecord {
+                id: rec.id.clone(),
+                prompt: rec.prompt.clone(),
+                ir_wav: rec.ir_wav.clone(),
+                metadata_json: rec.metadata_json.clone(),
+                analysis_json: rec.analysis_json.clone(),
+                descriptor: rec.descriptor.clone(),
+                ir_sha256: None,
+                descriptor_sha256: None,
+                channel_map_sha256: None,
+            }
+        };
+
+        if idx < train_n {
+            train.push(split_rec);
+        } else if idx < train_n + val_n {
+            val.push(split_rec);
+        } else {
+            test.push(split_rec);
+        }
+    }
+
+    let split_manifest = DatasetSplitManifest {
+        schema_version: "latent-ir.dataset-split.v1".to_string(),
+        project: "latent-ir".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        generated_at_utc: Utc::now(),
+        source_manifest_path: args.manifest.display().to_string(),
+        source_manifest_sha256,
+        split_seed: args.seed,
+        ratios: DatasetSplitRatios {
+            train: args.train_ratio,
+            val: args.val_ratio,
+            test: args.test_ratio,
+        },
+        counts: DatasetSplitCounts {
+            total,
+            train: train.len(),
+            val: val.len(),
+            test: test.len(),
+        },
+        hash_locked: args.lock_hashes,
+        train: train.clone(),
+        val: val.clone(),
+        test: test.clone(),
+    };
+    util::json::write_pretty_json(&args.output, &split_manifest)?;
+
+    if args.emit_training_json {
+        let out_root = args.output.parent().unwrap_or_else(|| Path::new("."));
+        write_split_training_json(
+            out_root.join("train_text.json"),
+            out_root.join("train_audio.json"),
+            &train,
+        )?;
+        write_split_training_json(
+            out_root.join("val_text.json"),
+            out_root.join("val_audio.json"),
+            &val,
+        )?;
+        write_split_training_json(
+            out_root.join("test_text.json"),
+            out_root.join("test_audio.json"),
+            &test,
+        )?;
+    }
+
+    println!(
+        "{}",
+        util::console::info("split_manifest", args.output.display().to_string())
+    );
+    println!("{}", util::console::metric("total", total));
+    println!(
+        "{}",
+        util::console::metric("train", split_manifest.counts.train)
+    );
+    println!(
+        "{}",
+        util::console::metric("val", split_manifest.counts.val)
+    );
+    println!(
+        "{}",
+        util::console::metric("test", split_manifest.counts.test)
+    );
+    println!(
+        "{}",
+        util::console::metric("hash_locked", split_manifest.hash_locked)
+    );
+    Ok(())
+}
+
+fn write_split_training_json(
+    text_path: impl AsRef<Path>,
+    audio_path: impl AsRef<Path>,
+    split: &[DatasetSplitRecord],
+) -> Result<()> {
+    let text: Vec<TextTrainSample> = split
+        .iter()
+        .map(|r| TextTrainSample {
+            prompt: r.prompt.clone(),
+            descriptor: r.descriptor.clone(),
+        })
+        .collect();
+    let audio: Vec<AudioTrainSample> = split
+        .iter()
+        .map(|r| AudioTrainSample {
+            audio_path: r.ir_wav.clone(),
+            descriptor: r.descriptor.clone(),
+        })
+        .collect();
+    util::json::write_pretty_json(text_path, &text)?;
+    util::json::write_pretty_json(audio_path, &audio)?;
+    Ok(())
+}
+
+fn validate_split_args(args: &DatasetSplitArgs) -> Result<()> {
+    anyhow::ensure!(args.train_ratio.is_finite(), "train-ratio must be finite");
+    anyhow::ensure!(args.val_ratio.is_finite(), "val-ratio must be finite");
+    anyhow::ensure!(args.test_ratio.is_finite(), "test-ratio must be finite");
+    anyhow::ensure!(
+        args.train_ratio >= 0.0 && args.val_ratio >= 0.0 && args.test_ratio >= 0.0,
+        "split ratios must be >= 0"
+    );
+    let sum = args.train_ratio + args.val_ratio + args.test_ratio;
+    anyhow::ensure!((sum - 1.0).abs() <= 1e-3, "split ratios must sum to 1.0");
     Ok(())
 }
 

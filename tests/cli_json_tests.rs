@@ -44,6 +44,7 @@ fn generate_writes_metadata_and_analysis_json() {
     assert!(meta["descriptor"].is_object());
     assert!(meta["analysis"].is_object());
     assert!(meta["conditioning"]["combined_delta"].is_object());
+    assert!(meta["conditioning"]["uncertainty"]["overall_confidence"].is_number());
     assert!(meta["ir_sha256"].as_str().unwrap_or("").len() >= 64);
     assert!(meta["descriptor_sha256"].as_str().unwrap_or("").len() >= 64);
     assert!(meta["channel_map_sha256"].as_str().unwrap_or("").len() >= 64);
@@ -756,6 +757,42 @@ fn morph_auto_resamples_second_ir_when_sample_rates_mismatch() {
     let out = util::audio::read_wav_f32(&out_path).unwrap();
     assert_eq!(out.sample_rate, 48_000);
     assert_eq!(out.channels.len(), 1);
+}
+
+#[test]
+fn morph_supports_alpha_trajectory_json() {
+    let dir = tempdir().expect("tempdir");
+    let a_path = dir.path().join("a.wav");
+    let b_path = dir.path().join("b.wav");
+    let traj_path = dir.path().join("alpha_traj.json");
+    let out_path = dir.path().join("morph_traj.wav");
+
+    util::audio::write_wav_f32(&a_path, 48_000, &[vec![1.0, 0.0, 0.0, 0.0, 0.0]]).unwrap();
+    util::audio::write_wav_f32(&b_path, 48_000, &[vec![0.0, 0.0, 0.0, 0.0, 1.0]]).unwrap();
+    std::fs::write(
+        &traj_path,
+        r#"{"keyframes":[{"t":0.0,"alpha":0.0},{"t":1.0,"alpha":1.0}]}"#,
+    )
+    .unwrap();
+
+    let cli = Cli::try_parse_from([
+        "latent-ir",
+        "morph",
+        a_path.to_str().expect("utf8"),
+        b_path.to_str().expect("utf8"),
+        "--alpha-trajectory",
+        traj_path.to_str().expect("utf8"),
+        "--output",
+        out_path.to_str().expect("utf8"),
+    ])
+    .expect("parse");
+    dispatch(cli).expect("morph trajectory should succeed");
+
+    let out = util::audio::read_wav_f32(&out_path).unwrap();
+    assert_eq!(out.channels.len(), 1);
+    assert!(out.channels[0].len() >= 5);
+    assert!(out.channels[0][0] > 0.7);
+    assert!(out.channels[0][4] > 0.7);
 }
 
 #[test]

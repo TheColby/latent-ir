@@ -240,6 +240,12 @@ pub struct MorphArgs {
     #[arg(long, default_value_t = 0.5)]
     pub alpha: f32,
 
+    /// Optional alpha trajectory JSON path for time-varying morph blends.
+    ///
+    /// Schema: {"keyframes":[{"t":0.0,"alpha":0.1},{"t":1.0,"alpha":0.9}]}
+    #[arg(long)]
+    pub alpha_trajectory: Option<PathBuf>,
+
     /// Automatically resample the second IR to match the first IR sample rate when needed.
     #[arg(long, default_value_t = false)]
     pub auto_resample: bool,
@@ -453,6 +459,8 @@ pub struct DatasetArgs {
 pub enum DatasetMode {
     /// Synthesize a labeled IR dataset (WAV + metadata + analysis + optional training JSON exports).
     Synthesize(DatasetSynthesizeArgs),
+    /// Create deterministic train/val/test splits with optional hash locks.
+    Split(DatasetSplitArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -513,12 +521,42 @@ pub struct DatasetSynthesizeArgs {
     pub max_failures: usize,
 }
 
+#[derive(Debug, Clone, Args)]
+pub struct DatasetSplitArgs {
+    /// Input dataset manifest JSON (`latent-ir.dataset.v1`).
+    #[arg(long)]
+    pub manifest: PathBuf,
+    /// Output split manifest JSON (`latent-ir.dataset-split.v1`).
+    #[arg(short, long)]
+    pub output: PathBuf,
+    /// Deterministic split seed.
+    #[arg(long, default_value_t = 2027)]
+    pub seed: u64,
+    /// Train split ratio.
+    #[arg(long, default_value_t = 0.8)]
+    pub train_ratio: f32,
+    /// Validation split ratio.
+    #[arg(long, default_value_t = 0.1)]
+    pub val_ratio: f32,
+    /// Test split ratio.
+    #[arg(long, default_value_t = 0.1)]
+    pub test_ratio: f32,
+    /// Resolve metadata hashes into the split manifest for integrity locking.
+    #[arg(long, default_value_t = false)]
+    pub lock_hashes: bool,
+    /// Emit split-specific train-encoder datasets (`*_text.json`, `*_audio.json`).
+    #[arg(long, default_value_t = false)]
+    pub emit_training_json: bool,
+}
+
 #[derive(Debug, Clone, Subcommand)]
 pub enum BenchmarkMode {
     /// Run benchmark suite on a benchmark dataset.
     Run(BenchmarkRunArgs),
     /// Check a benchmark report against a baseline and fail on regressions.
     Check(BenchmarkCheckArgs),
+    /// Build a trend dashboard from multiple benchmark reports.
+    Trend(BenchmarkTrendArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -557,6 +595,16 @@ pub struct BenchmarkCheckArgs {
     /// Allowed relative regression threshold (e.g. 0.05 == 5%).
     #[arg(long, default_value_t = 0.05)]
     pub max_regression: f32,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct BenchmarkTrendArgs {
+    /// Benchmark report JSON paths (ordered oldest->newest).
+    #[arg(long, required = true)]
+    pub reports: Vec<PathBuf>,
+    /// Markdown output path for dashboard.
+    #[arg(short, long)]
+    pub output: PathBuf,
 }
 
 #[derive(Debug, Clone, Args)]

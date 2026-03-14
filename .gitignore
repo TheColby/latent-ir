@@ -3,5 +3,6 @@
 *.json
 !examples/*.json
 !examples/layouts/*.json
+!examples/morph/*.json
 !ci/**/*.json
 .DS_Store

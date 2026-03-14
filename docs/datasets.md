@@ -8,6 +8,16 @@ Primary command:
 latent-ir dataset synthesize --out-dir out/research_dataset --count 512
 ```
 
+Companion split command:
+
+```bash
+latent-ir dataset split \
+  --manifest out/research_dataset/manifest.dataset.json \
+  --output out/research_dataset/split.dataset.json \
+  --train-ratio 0.8 --val-ratio 0.1 --test-ratio 0.1 \
+  --lock-hashes
+```
+
 ## What It Produces
 
 By default, each synthesized sample writes:
@@ -18,10 +28,15 @@ By default, each synthesized sample writes:
 
 Dataset-level artifact:
 - `manifest.dataset.json` (`latent-ir.dataset.v1`)
+- `split.dataset.json` (`latent-ir.dataset-split.v1`)
 
 Optional exports (`--export-training-json`):
 - `training_text.json` for prompt->descriptor training
 - `training_audio.json` for audio->descriptor training
+
+Optional split exports (`dataset split --emit-training-json`):
+- `train_text.json`, `val_text.json`, `test_text.json`
+- `train_audio.json`, `val_audio.json`, `test_audio.json`
 
 These export formats are directly compatible with:
 - `latent-ir train-encoder text --dataset ...`
@@ -46,6 +61,10 @@ These export formats are directly compatible with:
 - enable `--quality-gate --quality-profile launch|strict`
 - use manifest summary + warnings for triage
 
+5. Hash-locked split reproducibility
+- run `dataset split --lock-hashes`
+- split records include per-sample metadata hashes (`ir_sha256`, `descriptor_sha256`, `channel_map_sha256`)
+
 ## Important Flags
 
 - `--prompt-bank-json <path>`: JSON string array of prompts
@@ -54,6 +73,8 @@ These export formats are directly compatible with:
 - `--tail-fade-ms <ms>`: optional forced zero-end taper
 - `--quality-gate --quality-profile <lenient|launch|strict>`: per-sample quality filter context
 - `--export-training-json`: emit train-encoder-ready files
+- `dataset split --lock-hashes`: embed integrity hashes in split records
+- `dataset split --emit-training-json`: emit split-specific training datasets
 
 ## Example
 

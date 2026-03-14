@@ -67,6 +67,38 @@
         "height_energy_ratio": { "min": 0.0, "max": 0.05 },
         "lfe_energy_ratio": { "min": 0.0, "max": 0.01 }
       }
+    },
+    {
+      "id": "foa_cavern_reference",
+      "prompt": "vast cavernous chamber",
+      "channels": "foa",
+      "seed": 1006,
+      "sample_rate": 48000,
+      "duration": 1.0,
+      "expected": {
+        "channels": 4,
+        "inter_channel_correlation_mean_abs": { "min": 0.0, "max": 0.35 },
+        "front_energy_ratio": { "min": 0.0, "max": 1.0 },
+        "rear_energy_ratio": { "min": 0.0, "max": 1.0 },
+        "height_energy_ratio": { "min": 0.0, "max": 1.0 },
+        "lfe_energy_ratio": { "min": 0.0, "max": 0.01 }
+      }
+    },
+    {
+      "id": "surround_71_hall",
+      "prompt": "large concert hall",
+      "channels": "7.1",
+      "seed": 1007,
+      "sample_rate": 48000,
+      "duration": 1.0,
+      "expected": {
+        "channels": 8,
+        "inter_channel_correlation_mean_abs": { "min": 0.0, "max": 0.25 },
+        "front_energy_ratio": { "min": 0.10, "max": 0.90 },
+        "rear_energy_ratio": { "min": 0.0, "max": 0.80 },
+        "height_energy_ratio": { "min": 0.0, "max": 0.30 },
+        "lfe_energy_ratio": { "min": 0.0, "max": 0.10 }
+      }
     }
   ]
 }
