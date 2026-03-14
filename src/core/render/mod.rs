@@ -162,6 +162,7 @@ impl Renderer {
 }
 
 fn should_use_fft(input_len: usize, ir_len: usize) -> bool {
+    // Direct convolution is honest and simple, until it suddenly isn't.
     input_len.saturating_mul(ir_len) > 2_000_000
 }
 
@@ -183,6 +184,7 @@ fn convolve_fft_partitioned(x: &[f32], h: &[f32], partition_size: usize) -> Vec<
         return vec![];
     }
 
+    // Tiny FFT partitions are mostly a great way to benchmark allocator overhead.
     let b = partition_size.max(64);
     let n_fft = (2 * b).next_power_of_two();
     let output_len = x.len() + h.len() - 1;
@@ -225,6 +227,7 @@ fn convolve_fft_partitioned(x: &[f32], h: &[f32], partition_size: usize) -> Vec<
             }
         }
         fft.process(&mut x_fft);
+        // Ring-buffer walk: old blocks out, new blocks in, nobody panics.
         history_head = (history_head + partitions - 1) % partitions;
         x_history[history_head].copy_from_slice(&x_fft);
 

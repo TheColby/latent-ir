@@ -1,57 +1,55 @@
-# Launch Readiness Notes
+# Launch Readiness
 
-This document is a practical checklist for public launch posts (for example LinkedIn, X, forum announcements) and the top technical questions people usually ask.
+This document is a practical pre-launch checklist for public announcements.
 
-## Expected Questions and Project-Backed Answers
+## Common Public Questions and Ready Answers
 
-1. Where are the demos?
-- Answer with reproducible assets, not screenshots.
-- Use `./scripts/generate_demo_pack.sh` to generate `out/demos/*.wav` plus analysis JSON.
+1. Where are the audio demos?
+- Provide deterministic demo artifacts, not screenshots.
+- Use `./scripts/generate_demo_pack.sh`.
 
-2. Is this actually ML?
-- Current production path is procedural DSP generation.
-- ML in v0/v0.3 is conditioning support (semantic rules + lightweight learned encoders), not a hidden large model generator.
-- State this directly in launch copy.
+2. Is this really ML?
+- Be explicit: generation is DSP-first.
+- Learned components currently affect conditioning, not opaque end-to-end IR generation.
 
-3. How trustworthy are RT60/EDT numbers?
-- Metrics are deterministic engineering estimates intended for comparative workflow use.
-- They are not standards-certified room-acoustics metrology.
-- CLI output now prints this caveat in both `generate` and `analyze`.
+3. How trustworthy are RT/EDT metrics?
+- Present them as deterministic engineering estimates.
+- Do not market them as certified architectural acoustics metrology.
 
 4. What spatial formats are truly supported?
 - Built-ins: `mono`, `stereo`, `foa`, `5.1`, `7.1`, `7.1.4`, `7.2.4`.
-- Custom: `--channels custom --layout-json ...` with cartesian and/or polar metadata.
-- Object-based Atmos rendering is explicitly out of scope for current versions.
+- Custom layouts: `--channels custom --layout-json ...`.
+- Object-based Atmos rendering is currently out of scope.
 
-5. How does this fit production?
-- Recommend a reproducible pipeline:
-  - `generate` variants
-  - `analyze` and score/filter
-  - `morph` candidates
-  - `render` stems offline
-  - audition in DAW
+5. How does this fit production workflows?
+- Generate variants
+- Analyze/filter candidates
+- Morph finalists
+- Render stems offline
+- Audition in DAW/convolution host
 
-6. Does this scale to large jobs?
-- Render `--engine auto` now selects `direct`, `fft-partitioned`, or `fft-streaming` based on workload/IR size and prints the decision.
-- For long-form multichannel, use `fft-streaming`.
-- Mixed sample-rate assets can be reconciled with `--auto-resample` in `render` and `morph`.
+6. Can it handle long multichannel jobs?
+- Use `--engine auto` or `--engine fft-streaming`.
+- Engine choice is reported in console.
 
-7. Install issues (`latent-ir: command not found`)
+7. What about sample-rate mismatches?
+- Use `--auto-resample` for `render`/`morph` when needed.
+- Keep strict mode by default in automated pipelines when reproducibility requires exact inputs.
+
+8. PATH/install issues?
 - Use `./scripts/install_local.sh`.
-- Ensure cargo bin directory is on `PATH` (`$HOME/.cargo/bin` unless custom `CARGO_HOME`).
+- Ensure `$HOME/.cargo/bin` (or custom `$CARGO_HOME/bin`) is on `PATH`.
 
-## Suggested Launch Artifact Set
+## Launch Artifact Checklist
 
-- 2 to 4 deterministic IR WAV files (different acoustic intents).
-- 1 morph example WAV.
-- JSON analysis for each WAV.
-- 1 short A/B rendered clip per IR using the same dry source.
-- Exact command lines used to generate each artifact.
+- 2-4 generated IR WAV examples (contrasting acoustic intent)
+- JSON analysis sidecar per IR
+- one morph example
+- one render A/B clip per IR (same dry source)
+- exact command lines used
 
-## Scope Honesty Snippet
+## Suggested Scope-Honesty Blurb
 
-Use wording similar to:
+`latent-ir is a deterministic DSP-first IR synthesis toolkit with hybrid conditioning hooks. Current metrics are engineering estimates for reproducible workflow comparison.`
 
-`latent-ir is currently a deterministic DSP-first IR synthesis system with hybrid conditioning hooks. Current metrics are engineering estimates for reproducible workflow comparisons.`
-
-This removes most avoidable credibility friction.
+Use this wording (or equivalent) to preempt avoidable credibility friction.

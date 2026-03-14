@@ -9,7 +9,27 @@ const AUTO_STREAMING_WORKLOAD_SAMPLES: usize = 40_000_000;
 const AUTO_STREAMING_IR_LEN: usize = 262_144;
 
 pub fn run(args: RenderArgs) -> Result<()> {
+    anyhow::ensure!(args.mix.is_finite(), "mix must be a finite number");
     let mix = args.mix.clamp(0.0, 1.0);
+    if (mix - args.mix).abs() > f32::EPSILON {
+        println!(
+            "{}",
+            util::console::warning(&format!(
+                "mix {:.4} clamped to {:.4} (valid range [0,1])",
+                args.mix, mix
+            ))
+        );
+    }
+    let partition_size = args.partition_size.max(64);
+    if partition_size != args.partition_size {
+        println!(
+            "{}",
+            util::console::warning(&format!(
+                "partition-size {} raised to 64 (minimum supported block size)",
+                args.partition_size
+            ))
+        );
+    }
     let input = util::audio::read_wav_f32(&args.input)
         .with_context(|| format!("failed to read {}", args.input.display()))?;
     let mut ir = util::audio::read_wav_f32(&args.ir)
@@ -63,7 +83,7 @@ pub fn run(args: RenderArgs) -> Result<()> {
 
     let options = RenderOptions {
         engine,
-        partition_size: args.partition_size,
+        partition_size,
     };
     if engine == RenderEngine::FftStreaming {
         write_streaming_render(
@@ -71,7 +91,7 @@ pub fn run(args: RenderArgs) -> Result<()> {
             &input.channels,
             &ir.channels,
             mix,
-            options.partition_size,
+            partition_size,
             input.sample_rate,
             &args.output,
         )
@@ -112,6 +132,7 @@ fn auto_engine_for_sizes(input_len: usize, ir_len: usize, channels: usize) -> Re
     let c = channels.max(1);
     let out_len = input_len.saturating_add(ir_len).saturating_sub(1);
     let workload = out_len.saturating_mul(c);
+    // Heuristic on purpose: nobody wants accidental direct convolution on movie-length stems.
     if workload >= AUTO_STREAMING_WORKLOAD_SAMPLES || ir_len >= AUTO_STREAMING_IR_LEN {
         return RenderEngine::FftStreaming;
     }

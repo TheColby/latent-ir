@@ -29,6 +29,10 @@ pub fn metric(name: &str, value: impl Display) -> String {
     )
 }
 
+pub fn metric_opt(name: &str, value: Option<String>) -> String {
+    metric(name, value.unwrap_or_else(|| "n/a".to_string()))
+}
+
 pub fn info(name: &str, value: impl Display) -> String {
     format!(
         "{}: {}",

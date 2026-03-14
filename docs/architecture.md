@@ -1,140 +1,132 @@
 # latent-ir Architecture
 
-## Thesis
+## Design Thesis
 
 `latent-ir` models reverberation as a descriptor-conditioned acoustic design space.
 
-Core principle:
+Guiding principle:
 
-**ML selects or infers intent; DSP synthesizes and validates the IR.**
+**Conditioning proposes intent; DSP synthesis enforces behavior.**
 
-The system stays deterministic and auditable even when learned modules are present.
+This keeps generation deterministic and inspectable while still leaving room for learned models.
 
-## System Pipeline
+## End-to-End Pipeline
 
 ```text
 prompt / reference audio / explicit params
 -> conditioning chain
 -> DescriptorSet
--> ProceduralIrGenerator
--> normalization + constraints
+-> procedural generator
+-> validation / normalization
 -> final IR
--> IrAnalyzer + JSON sidecars
+-> analyzer + metadata sidecars
 ```
 
-## Canonical Acoustic Representation
+## Canonical Representation (`DescriptorSet`)
 
-`DescriptorSet` groups parameters into four domains:
+The descriptor model is the compatibility contract across CLI, synthesis, analysis, and learning.
 
-- Time: `duration`, `predelay`, `t60`, `edt`, `attack_gap`
-- Spectral: `brightness`, `hf_damping`, `lf_bloom`, `spectral_tilt`, band decays
-- Structural: early/late density, diffusion, modal density, tail noise, grain
-- Spatial: format, width, decorrelation, asymmetry, custom layout geometry, optional source/listener positions
+Domains:
+- time: `duration`, `predelay`, `t60`, `edt`, `attack_gap`
+- spectral: brightness/damping/tilt + low/mid/high decay controls
+- structural: early/late density, diffusion, modal/tail/grain controls
+- spatial: channel format, width/decorrelation/asymmetry, custom layout, optional source/listener positions
 
-This representation is the interoperability contract across generation, analysis, learning, and metadata.
+## Conditioning Stack
 
-## Conditioning Layers
-
-Current chain can combine:
-
+Current stack can combine:
 - preset defaults
-- rule-based semantic resolver
-- learned text encoder (JSON model; optional ONNX backend)
-- learned audio encoder (JSON model; optional ONNX backend)
+- semantic prompt resolver (rule-based)
+- learned text encoder (JSON model, optional ONNX adapter)
+- learned audio encoder (JSON model, optional ONNX adapter)
 - explicit CLI overrides
 
-Conditioning outputs descriptor deltas that are applied before clamping and generation.
+All deltas are resolved onto `DescriptorSet` before synthesis.
 
-## Procedural IR Synthesis
+## Synthesis Model (v0.x)
 
-Main components:
-
-1. direct impulse/predelay anchor
+Procedural IR decomposition:
+1. direct impulse anchor + predelay
 2. sparse early reflections
 3. dense stochastic late tail
 4. frequency-dependent envelope shaping
-5. spatial projection to built-in or custom channel layouts
-6. geometry-aware custom shaping from `position_m`:
-   - relative propagation delay
-   - distance gain falloff
-   - HF air-loss
-   - image-source-lite first-order early reflections
-7. optional virtual source/listener steering via `source_position_m` / `listener_position_m`
-8. normalization and output sanity checks
-9. duration floor protection to reduce premature tail truncation (unless explicitly disabled)
+5. channel projection for built-in and custom layouts
+6. geometry-aware custom processing (`position_m`):
+   - relative delay
+   - distance gain
+   - HF air-loss shaping
+   - image-source-lite first-order early clusters
+7. normalization and sanity checks
+
+Tail behavior guardrail:
+- generation applies a duration floor by default to reduce premature tail truncation
+- user can opt out via `--allow-tail-truncation`
 
 ## Spatial Model
 
 Built-in layouts:
-
 - `mono`, `stereo`, `foa` (ambiX), `5.1`, `7.1`, `7.1.4`, `7.2.4`
 
 Custom layout JSON supports:
-
-- polar (`azimuth_deg` + `elevation_deg`)
 - cartesian (`position_m`)
-- mixed inputs with consistency validation
+- polar (`azimuth_deg`, `elevation_deg`)
+- mixed input with consistency validation
 
-Coordinate convention for cartesian->polar derivation:
-
-- `+Y = 0 deg azimuth`
-- `+X = +90 deg azimuth`
+Cartesian convention:
+- `+Y = 0° azimuth`
+- `+X = +90° azimuth`
 - `+Z = elevation`
 
-`generate` emits validated `*.channels.json` channel-map sidecars for downstream analysis/routing reproducibility.
+`generate` emits a validated channel map sidecar (`*.channels.json`) for reproducible downstream routing and analysis.
 
 ## Analysis Philosophy
 
-Metrics are intentionally engineering-focused and deterministic:
+Analysis is deterministic and workflow-oriented.
 
-- EDC decay estimates: EDT/T20/T30/T60
+Key outputs include:
+- EDT / T20 / T30 / T60 estimates
 - predelay estimate
 - spectral centroid + band decay summaries
-- early/late energy ratios
-- stereo and inter-channel correlation summaries
-- directional energy summaries (front/rear/height/LFE with channel map)
-- arrival spread summaries
-- ITD-ish and IACC-style early coherence metrics
+- early/late energy summaries
+- inter-channel correlation summaries
+- arrival spread, ITD-ish, IACC-style coherence metrics
+- directional energy summaries when channel map is available
 
-These are not standards-certified architectural acoustics measurements.
+These values are engineering estimates for workflow consistency, not standards-certified architectural acoustics metrology.
 
-Both `generate` and `analyze` surface this caveat directly in console output so downstream users do not mistake these values for certified metrology.
+## Render Architecture
 
-## Render Strategy
-
-Render supports three concrete engines:
-
+Render engines:
 - `direct`
 - `fft-partitioned`
 - `fft-streaming`
 
-`render --engine auto` selects an engine from input/IR/channel workload heuristics and reports the decision in console output. This keeps small jobs simple while scaling large multichannel jobs with lower memory pressure.
+`render --engine auto` chooses engine by workload heuristics and reports the decision.
 
-`render` and `morph` also support optional linear sample-rate reconciliation (`--auto-resample`) for mixed-source workflows.
+Sample-rate mismatch handling:
+- strict by default (explicit error)
+- optional auto reconciliation in `render` and `morph` via `--auto-resample`
 
-## Reproducibility Model
+## Reproducibility Contract
 
-A run is intended to be reproducible from:
-
-- command arguments
+A run should be reproducible from:
+- command args
 - seed
 - sample rate
-- resolved descriptor state
-- model files/manifests used
+- resolved descriptor values
+- model paths/manifests
 - project version
 
 Artifacts:
-
-- WAV output
+- IR WAV
 - generation metadata JSON (`latent-ir.generation.v1`)
-- analysis report (`latent-ir.analysis.v1`)
-- channel map sidecar (`latent-ir.channel-map.v1`)
+- analysis JSON (`latent-ir.analysis.v1`)
+- channel map JSON (`latent-ir.channel-map.v1`)
 
-## Forward Compatibility
+## Extension Points
 
-Planned extensibility points:
-
-- richer latent conditioning contracts
+Planned near-term expansion:
+- latent projection contracts
 - confidence/uncertainty propagation
-- trajectory-conditioned morph/generation
-- stronger spatial/object/array abstractions
+- descriptor trajectory coupling for morph/generation
+- broader spatial benchmark coverage

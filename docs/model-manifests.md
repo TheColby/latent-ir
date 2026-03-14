@@ -1,24 +1,29 @@
 # Model Manifests
 
-Model manifests declare runtime compatibility contracts for learned models.
+Model manifests define runtime compatibility contracts for learned models.
 
-Schema version:
-
+Schema:
 - `latent-ir.model-manifest.v1`
 
-## Manifest Fields
+## Why Manifests Exist
 
-- `name`: model identifier
+- explicit model/runtime compatibility checks
+- safer model swapping in CI and scripts
+- stronger reproducibility for experiments and releases
+
+## Core Fields
+
+- `name`: identifier
 - `format`:
   - `text_json_v1`
   - `audio_json_v1`
   - `text_onnx_v1`
   - `audio_onnx_v1`
-- `model_path`: model file path
+- `model_path`: model file location
 - `input_dim`: declared input width
 - `output_dim`: descriptor delta width (currently `20`)
-- `deterministic`: whether inference is deterministic
-- `required_features`: runtime feature requirements (for example `"onnx"`)
+- `deterministic`: deterministic inference declaration
+- `required_features`: runtime features (for example `onnx`)
 
 ## Validation Command
 
@@ -27,14 +32,14 @@ cargo run -- model validate --manifest manifests/text_encoder_manifest.json
 ```
 
 Validation checks include:
-
 - schema/version compatibility
-- output-dimension compatibility with runtime descriptor contract
-- required feature availability
+- output-dimension compatibility with descriptor contract
+- feature requirements
 - format-specific constraints
 
-## Why Use Manifests
+## Deployment Recommendation
 
-- explicit runtime contract for models
-- safer model swapping in scripts/CI
-- better long-term reproducibility for experiments and releases
+For reproducible pipelines:
+1. pin model files in version control or artifact storage
+2. validate manifests in CI
+3. include manifest + model path in experiment metadata

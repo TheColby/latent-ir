@@ -1,19 +1,34 @@
 # Benchmarking and Regression
 
-`latent-ir` includes evaluation and benchmark tooling intended for reproducible regression control.
+`latent-ir` ships with reproducible evaluation and regression tooling intended to catch real behavior drift before release.
 
-## Components
+## Tooling Surface
 
-- `eval text` / `eval audio`: baseline report generation for learned conditioning models
-- `eval check`: regression gate against committed baseline reports
-- `benchmark run`: end-to-end objective/speed/stability/perceptual-proxy report
-- `benchmark check`: regression gate for benchmark reports
-- spatial corpus tests: envelope checks for multichannel spatial behavior
-- streaming render QA: numerical parity and block-boundary integrity checks
+- `eval text`
+- `eval audio`
+- `eval check`
+- `benchmark run`
+- `benchmark check`
+- spatial corpus tests
+- streaming render QA tests
 
-## Benchmark Dataset Schema
+## What Each Tool Does
 
-`benchmark run` expects JSON with schema `latent-ir.benchmark.dataset.v1`:
+- `eval text` / `eval audio`
+  - evaluates learned conditioning quality against labeled datasets
+  - emits baseline-friendly reports
+- `eval check`
+  - compares new eval report to committed baseline
+  - fails on configured regressions
+- `benchmark run`
+  - executes end-to-end synthesis + analysis benchmark pass
+  - emits objective/proxy/speed metrics
+- `benchmark check`
+  - compares benchmark report against baseline thresholds
+
+## Dataset Schema
+
+`benchmark run` expects `latent-ir.benchmark.dataset.v1`:
 
 ```json
 {
@@ -30,11 +45,16 @@
 }
 ```
 
-Only `id` is strictly required; quality improves when target descriptor and/or target IR are provided.
+`id` is required. Better targets produce more useful regressions.
 
-## Run Benchmark
+## Run Examples
 
 ```bash
+cargo run -- eval text \
+  --dataset datasets/eval_text.json \
+  --model models/text_encoder_v1.json \
+  --output reports/eval_text.json
+
 cargo run -- benchmark run \
   --dataset datasets/benchmark_suite.json \
   --text-model models/text_encoder_v1.json \
@@ -43,64 +63,55 @@ cargo run -- benchmark run \
   --output reports/benchmark.json
 ```
 
-Report schema: `latent-ir.benchmark.v1`.
-
-## Regression Checks
+## Regression Gate Examples
 
 ```bash
 cargo run -- eval check \
-  --report reports/eval_text_new.json \
+  --report reports/eval_text.json \
   --baseline ci/baselines/eval_text_baseline.json \
   --max-regression 0.10
 
 cargo run -- benchmark check \
-  --report reports/benchmark_new.json \
+  --report reports/benchmark.json \
   --baseline ci/baselines/benchmark_baseline.json \
   --max-regression 0.05
 ```
 
-Checks fail when selected key metrics regress past thresholds.
-
-## Spatial Regression Corpus
+## Spatial Regression Coverage
 
 Dataset:
-
 - `ci/datasets/spatial_corpus_ci.json`
 
-Test harness:
-
+Harness:
 - `tests/spatial_corpus_tests.rs`
 
 Coverage includes:
+- 7.2.4 beds
+- custom 16-channel rings
+- custom A.B.C-style elevated layouts
+- cartesian-only custom ingestion
 
-- 7.2.4 bed
-- custom 16-channel ring
-- custom A.B.C-style elevated layout
-- cartesian-only custom layout ingestion
+## Render QA Coverage
 
-Envelope metrics include:
-
-- inter-channel mean absolute correlation
-- directional/LFE energy ratios
-
-## Render QA
-
-Render QA tests:
-
+Harness:
 - `tests/render_spatial_qa_tests.rs`
 
 Checks include:
-
-- direct vs streaming numerical parity
-- output length correctness
-- block-boundary artifact detection
+- streaming vs direct parity
+- output-length correctness
+- block-boundary integrity
 
 ## CI Entry Point
-
-Run all local gates:
 
 ```bash
 ./scripts/ci_regression_gates.sh
 ```
 
-This script mirrors repository CI behavior (`.github/workflows/regression-gates.yml`).
+This mirrors `.github/workflows/regression-gates.yml`.
+
+## Operational Recommendation
+
+For release candidates:
+1. run full gates locally
+2. review warning deltas (not only pass/fail)
+3. refresh baselines only when behavior changes are intentional and documented

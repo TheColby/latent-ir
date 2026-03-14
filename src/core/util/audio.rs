@@ -94,6 +94,7 @@ fn resample_channel_linear(input: &[f32], src_rate: u32, dst_rate: u32) -> Vec<f
         return input.to_vec();
     }
 
+    // Linear interpolation is intentionally boring here: deterministic, dependency-free, and good enough for CLI glue.
     let ratio = dst_rate as f64 / src_rate as f64;
     let out_len = ((input.len() as f64) * ratio).round().max(1.0) as usize;
     let mut out = vec![0.0f32; out_len];

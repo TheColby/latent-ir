@@ -112,153 +112,84 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
         );
         println!(
             "{}",
-            util::console::metric(
+            util::console::metric_opt(
                 "inter_channel_corr_mean_abs",
-                report
-                    .inter_channel_correlation_mean_abs
-                    .map(|v| format!("{v:.4}"))
-                    .unwrap_or_else(|| "n/a".to_string())
+                fmt_opt(report.inter_channel_correlation_mean_abs, 4)
             )
         );
         println!(
             "{}",
-            util::console::metric(
+            util::console::metric_opt(
                 "inter_channel_corr_min_abs",
-                report
-                    .inter_channel_correlation_min_abs
-                    .map(|v| format!("{v:.4}"))
-                    .unwrap_or_else(|| "n/a".to_string())
+                fmt_opt(report.inter_channel_correlation_min_abs, 4)
             )
         );
         println!(
             "{}",
-            util::console::metric(
-                "arrival_min_ms",
-                report
-                    .arrival_min_ms
-                    .map(|v| format!("{v:.3}"))
-                    .unwrap_or_else(|| "n/a".to_string())
-            )
+            util::console::metric_opt("arrival_min_ms", fmt_opt(report.arrival_min_ms, 3))
         );
         println!(
             "{}",
-            util::console::metric(
-                "arrival_max_ms",
-                report
-                    .arrival_max_ms
-                    .map(|v| format!("{v:.3}"))
-                    .unwrap_or_else(|| "n/a".to_string())
-            )
+            util::console::metric_opt("arrival_max_ms", fmt_opt(report.arrival_max_ms, 3))
         );
         println!(
             "{}",
-            util::console::metric(
-                "arrival_spread_ms",
-                report
-                    .arrival_spread_ms
-                    .map(|v| format!("{v:.3}"))
-                    .unwrap_or_else(|| "n/a".to_string())
-            )
+            util::console::metric_opt("arrival_spread_ms", fmt_opt(report.arrival_spread_ms, 3))
         );
         println!(
             "{}",
-            util::console::metric(
-                "itd_01_ms",
-                report
-                    .itd_01_ms
-                    .map(|v| format!("{v:.3}"))
-                    .unwrap_or_else(|| "n/a".to_string())
-            )
+            util::console::metric_opt("itd_01_ms", fmt_opt(report.itd_01_ms, 3))
         );
         println!(
             "{}",
-            util::console::metric(
-                "iacc_early_01",
-                report
-                    .iacc_early_01
-                    .map(|v| format!("{v:.5}"))
-                    .unwrap_or_else(|| "n/a".to_string())
-            )
+            util::console::metric_opt("iacc_early_01", fmt_opt(report.iacc_early_01, 5))
         );
         println!(
             "{}",
-            util::console::metric(
+            util::console::metric_opt(
                 "inter_channel_itd_mean_abs_ms",
-                report
-                    .inter_channel_itd_mean_abs_ms
-                    .map(|v| format!("{v:.3}"))
-                    .unwrap_or_else(|| "n/a".to_string())
+                fmt_opt(report.inter_channel_itd_mean_abs_ms, 3)
             )
         );
         println!(
             "{}",
-            util::console::metric(
+            util::console::metric_opt(
                 "inter_channel_itd_max_abs_ms",
-                report
-                    .inter_channel_itd_max_abs_ms
-                    .map(|v| format!("{v:.3}"))
-                    .unwrap_or_else(|| "n/a".to_string())
+                fmt_opt(report.inter_channel_itd_max_abs_ms, 3)
             )
         );
         println!(
             "{}",
-            util::console::metric(
+            util::console::metric_opt(
                 "inter_channel_iacc_early_mean",
-                report
-                    .inter_channel_iacc_early_mean
-                    .map(|v| format!("{v:.5}"))
-                    .unwrap_or_else(|| "n/a".to_string())
+                fmt_opt(report.inter_channel_iacc_early_mean, 5)
             )
         );
         println!(
             "{}",
-            util::console::metric(
+            util::console::metric_opt(
                 "inter_channel_iacc_early_min",
-                report
-                    .inter_channel_iacc_early_min
-                    .map(|v| format!("{v:.5}"))
-                    .unwrap_or_else(|| "n/a".to_string())
+                fmt_opt(report.inter_channel_iacc_early_min, 5)
             )
         );
         println!(
             "{}",
-            util::console::metric(
-                "front_energy_ratio",
-                report
-                    .front_energy_ratio
-                    .map(|v| format!("{v:.4}"))
-                    .unwrap_or_else(|| "n/a".to_string())
-            )
+            util::console::metric_opt("front_energy_ratio", fmt_opt(report.front_energy_ratio, 4))
         );
         println!(
             "{}",
-            util::console::metric(
-                "rear_energy_ratio",
-                report
-                    .rear_energy_ratio
-                    .map(|v| format!("{v:.4}"))
-                    .unwrap_or_else(|| "n/a".to_string())
-            )
+            util::console::metric_opt("rear_energy_ratio", fmt_opt(report.rear_energy_ratio, 4))
         );
         println!(
             "{}",
-            util::console::metric(
+            util::console::metric_opt(
                 "height_energy_ratio",
-                report
-                    .height_energy_ratio
-                    .map(|v| format!("{v:.4}"))
-                    .unwrap_or_else(|| "n/a".to_string())
+                fmt_opt(report.height_energy_ratio, 4)
             )
         );
         println!(
             "{}",
-            util::console::metric(
-                "lfe_energy_ratio",
-                report
-                    .lfe_energy_ratio
-                    .map(|v| format!("{v:.4}"))
-                    .unwrap_or_else(|| "n/a".to_string())
-            )
+            util::console::metric_opt("lfe_energy_ratio", fmt_opt(report.lfe_energy_ratio, 4))
         );
         if !report.warnings.is_empty() {
             println!("{}", util::console::warning("warnings:"));
@@ -269,4 +200,8 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn fmt_opt(value: Option<f32>, decimals: usize) -> Option<String> {
+    value.map(|v| format!("{:.*}", decimals, v))
 }

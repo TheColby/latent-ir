@@ -1,20 +1,20 @@
 # Spatial Layouts
 
-`latent-ir` supports built-in surround/ambisonic-style layouts and custom user-defined arrays.
+`latent-ir` supports built-in formats and arbitrary custom arrays.
 
 ## Built-in Formats
 
 - `mono`
 - `stereo`
-- `foa` (ambiX channel order)
+- `foa` (ambiX order)
 - `5.1`
 - `7.1`
 - `7.1.4`
 - `7.2.4`
 
-Built-ins include stable labels and a generated channel-map sidecar for reproducible downstream analysis.
+Built-ins emit stable channel labels and companion channel-map sidecars.
 
-## Custom Layouts
+## Custom Layout Mode
 
 Use:
 
@@ -22,46 +22,43 @@ Use:
 latent-ir generate --channels custom --layout-json path/to/layout.json ...
 ```
 
-The layout schema supports:
+Accepted per-channel fields:
+- `label`
+- `position_m` (`x`, `y`, `z`)
+- `azimuth_deg`, `elevation_deg`
+- optional `is_lfe`
 
-- `position_m`: cartesian coordinates in meters (`x`, `y`, `z`)
-- `azimuth_deg` and `elevation_deg`: polar metadata
-- optional `is_lfe` flag per channel
-
-When `position_m` is present, it is treated as authoritative for geometry-driven processing.
+Rules:
+- provide either `position_m` or both polar angles
+- if both cartesian and polar are provided, they must be consistent
+- `position_m` is authoritative for geometry-driven processing when present
 
 ## Coordinate Convention
 
-Cartesian to polar derivation follows:
-
-- `+Y = 0 deg azimuth`
-- `+X = +90 deg azimuth`
+Cartesian -> polar derivation:
+- `+Y = 0° azimuth`
+- `+X = +90° azimuth`
 - `+Z = elevation`
 
-This convention is validated when both cartesian and polar values are provided.
+## Geometry-Driven Generation Behavior
 
-## Geometry-Driven Behavior
+With `position_m`, generation applies:
+- relative propagation delay
+- distance-based gain shaping
+- distance-based HF air-loss shaping
+- image-source-lite first-order early reflections
 
-For custom layouts with `position_m`, generation currently applies:
-
-- relative propagation delay by distance
-- distance-dependent gain falloff
-- distance-dependent HF air-loss shaping
-- image-source-lite early reflection clusters
-
-Virtual source and listener positions can be supplied via:
-
+Optional virtual scene controls:
 - `--source-x-m --source-y-m --source-z-m`
 - `--listener-x-m --listener-y-m --listener-z-m`
 
-## Example: 16-Channel Ring
-
-See:
+## Example Layout Files
 
 - `examples/layouts/custom_16_0_circle_10m_origin.json`
 - `examples/layouts/custom_16_0_circle_10m_origin_cartesian_only.json`
+- `examples/layouts/custom_abc_12.json`
 
-Example command:
+## Example Command
 
 ```bash
 cargo run -- generate \
@@ -72,11 +69,11 @@ cargo run -- generate \
   --layout-json examples/layouts/custom_16_0_circle_10m_origin_cartesian_only.json \
   --source-x-m 0.0 --source-y-m 24.0 --source-z-m 2.0 \
   --listener-x-m 0.0 --listener-y-m 0.0 --listener-z-m 1.5 \
-  --output out/dark_cave_16ch_cart_384k.wav
+  --output out/dark_cave_16ch_384k.wav
 ```
 
-## Out of Scope (Current)
+## Current Non-Goals
 
-- Object-based Atmos scene rendering
-- HOA orders beyond currently hardcoded built-ins (use `custom` for arbitrary arrays)
-- Full geometric or wave-based room simulation
+- object-based Atmos scene rendering
+- full geometric/wave room simulation
+- HOA beyond current built-ins (use custom layouts for arbitrary channel counts)

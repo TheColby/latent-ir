@@ -1,15 +1,15 @@
 # Perceptual Controls
 
-`latent-ir generate` exposes macro-level controls for fast descriptor steering.
+`latent-ir generate` exposes macro controls for fast, human-readable descriptor steering.
 
-## Macro Controls
+## Macro Control Range
 
-Range for each macro is `[-1, 1]`.
+Each macro uses `[-1, 1]`.
 
-- `--macro-size`: perceived space size
-- `--macro-distance`: perceived source-listener distance
-- `--macro-material`: perceived material hardness/brightness
-- `--macro-clarity`: perceived clarity vs smearing
+- `--macro-size`: perceived space scale
+- `--macro-distance`: perceived source/listener distance
+- `--macro-material`: perceived hardness/brightness
+- `--macro-clarity`: perceived clarity vs smear
 
 Example:
 
@@ -25,7 +25,12 @@ cargo run -- generate \
 
 ## Trajectory Automation
 
-`--macro-trajectory` accepts a normalized-time keyframe file:
+`--macro-trajectory` accepts keyframes with normalized time.
+
+Schema:
+- `latent-ir.macro-trajectory.v1`
+
+Example:
 
 ```json
 {
@@ -53,7 +58,7 @@ cargo run -- generate \
 }
 ```
 
-Example:
+Run:
 
 ```bash
 cargo run -- generate \
@@ -62,10 +67,8 @@ cargo run -- generate \
   --output out/trajectory_ir.wav
 ```
 
-Current implementation uses trajectory-conditioned segmented synthesis and overlap blending.
+## Practical Use
 
-## Practical Guidance
-
-- Start with small macro moves (`|value| <= 0.4`) before extreme values.
-- Combine macros with explicit overrides (`--t60`, `--predelay-ms`) when exact targets are needed.
-- Keep deterministic seeds during A/B work.
+- Keep macro values moderate (`|value| <= 0.4`) before pushing extremes.
+- Combine macros with hard constraints (`--t60`, `--predelay-ms`) when exact targets matter.
+- Keep seed fixed during A/B comparisons.

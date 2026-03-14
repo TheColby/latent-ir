@@ -557,6 +557,7 @@ fn inter_channel_itd_iacc_metrics(
 
     'pairs: for i in 0..c {
         for j in (i + 1)..c {
+            // O(N^2) pair walks are correct and painful; cap early for large layouts.
             if sampled >= max_pairs {
                 break 'pairs;
             }

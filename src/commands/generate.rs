@@ -316,6 +316,7 @@ fn apply_duration_floor(
         return;
     }
 
+    // Default to preserving decay intent; hard cuts are great for drums, not so much for cathedral IRs.
     let original = descriptor.time.duration;
     descriptor.time.duration = recommended;
     if (recommended - 30.0).abs() < 1e-6 {
@@ -450,163 +451,85 @@ fn print_generation_metrics(r: &AnalysisReport, channel_format: &str, channel_la
     );
     println!(
         "{}",
-        util::console::metric(
+        util::console::metric_opt(
             "inter_channel_corr_mean_abs",
-            match r.inter_channel_correlation_mean_abs {
-                Some(v) => format!("{v:.5}"),
-                None => "n/a".to_string(),
-            }
+            fmt_opt(r.inter_channel_correlation_mean_abs, 5)
         )
     );
     println!(
         "{}",
-        util::console::metric(
+        util::console::metric_opt(
             "inter_channel_corr_min_abs",
-            match r.inter_channel_correlation_min_abs {
-                Some(v) => format!("{v:.5}"),
-                None => "n/a".to_string(),
-            }
+            fmt_opt(r.inter_channel_correlation_min_abs, 5)
         )
     );
     println!(
         "{}",
-        util::console::metric(
-            "arrival_min_ms",
-            match r.arrival_min_ms {
-                Some(v) => format!("{v:.3}"),
-                None => "n/a".to_string(),
-            }
-        )
+        util::console::metric_opt("arrival_min_ms", fmt_opt(r.arrival_min_ms, 3))
     );
     println!(
         "{}",
-        util::console::metric(
-            "arrival_max_ms",
-            match r.arrival_max_ms {
-                Some(v) => format!("{v:.3}"),
-                None => "n/a".to_string(),
-            }
-        )
+        util::console::metric_opt("arrival_max_ms", fmt_opt(r.arrival_max_ms, 3))
     );
     println!(
         "{}",
-        util::console::metric(
-            "arrival_spread_ms",
-            match r.arrival_spread_ms {
-                Some(v) => format!("{v:.3}"),
-                None => "n/a".to_string(),
-            }
-        )
+        util::console::metric_opt("arrival_spread_ms", fmt_opt(r.arrival_spread_ms, 3))
     );
     println!(
         "{}",
-        util::console::metric(
-            "itd_01_ms",
-            match r.itd_01_ms {
-                Some(v) => format!("{v:.3}"),
-                None => "n/a".to_string(),
-            }
-        )
+        util::console::metric_opt("itd_01_ms", fmt_opt(r.itd_01_ms, 3))
     );
     println!(
         "{}",
-        util::console::metric(
-            "iacc_early_01",
-            match r.iacc_early_01 {
-                Some(v) => format!("{v:.5}"),
-                None => "n/a".to_string(),
-            }
-        )
+        util::console::metric_opt("iacc_early_01", fmt_opt(r.iacc_early_01, 5))
     );
     println!(
         "{}",
-        util::console::metric(
+        util::console::metric_opt(
             "inter_channel_itd_mean_abs_ms",
-            match r.inter_channel_itd_mean_abs_ms {
-                Some(v) => format!("{v:.3}"),
-                None => "n/a".to_string(),
-            }
+            fmt_opt(r.inter_channel_itd_mean_abs_ms, 3)
         )
     );
     println!(
         "{}",
-        util::console::metric(
+        util::console::metric_opt(
             "inter_channel_itd_max_abs_ms",
-            match r.inter_channel_itd_max_abs_ms {
-                Some(v) => format!("{v:.3}"),
-                None => "n/a".to_string(),
-            }
+            fmt_opt(r.inter_channel_itd_max_abs_ms, 3)
         )
     );
     println!(
         "{}",
-        util::console::metric(
+        util::console::metric_opt(
             "inter_channel_iacc_early_mean",
-            match r.inter_channel_iacc_early_mean {
-                Some(v) => format!("{v:.5}"),
-                None => "n/a".to_string(),
-            }
+            fmt_opt(r.inter_channel_iacc_early_mean, 5)
         )
     );
     println!(
         "{}",
-        util::console::metric(
+        util::console::metric_opt(
             "inter_channel_iacc_early_min",
-            match r.inter_channel_iacc_early_min {
-                Some(v) => format!("{v:.5}"),
-                None => "n/a".to_string(),
-            }
+            fmt_opt(r.inter_channel_iacc_early_min, 5)
         )
     );
     println!(
         "{}",
-        util::console::metric(
-            "front_energy_ratio",
-            match r.front_energy_ratio {
-                Some(v) => format!("{v:.5}"),
-                None => "n/a".to_string(),
-            }
-        )
+        util::console::metric_opt("front_energy_ratio", fmt_opt(r.front_energy_ratio, 5))
     );
     println!(
         "{}",
-        util::console::metric(
-            "rear_energy_ratio",
-            match r.rear_energy_ratio {
-                Some(v) => format!("{v:.5}"),
-                None => "n/a".to_string(),
-            }
-        )
+        util::console::metric_opt("rear_energy_ratio", fmt_opt(r.rear_energy_ratio, 5))
     );
     println!(
         "{}",
-        util::console::metric(
-            "height_energy_ratio",
-            match r.height_energy_ratio {
-                Some(v) => format!("{v:.5}"),
-                None => "n/a".to_string(),
-            }
-        )
+        util::console::metric_opt("height_energy_ratio", fmt_opt(r.height_energy_ratio, 5))
     );
     println!(
         "{}",
-        util::console::metric(
-            "lfe_energy_ratio",
-            match r.lfe_energy_ratio {
-                Some(v) => format!("{v:.5}"),
-                None => "n/a".to_string(),
-            }
-        )
+        util::console::metric_opt("lfe_energy_ratio", fmt_opt(r.lfe_energy_ratio, 5))
     );
     println!(
         "{}",
-        util::console::metric(
-            "stereo_correlation",
-            match r.stereo_correlation {
-                Some(v) => format!("{v:.5}"),
-                None => "n/a".to_string(),
-            }
-        )
+        util::console::metric_opt("stereo_correlation", fmt_opt(r.stereo_correlation, 5))
     );
     if !r.warnings.is_empty() {
         println!("{}", util::console::warning("warnings:"));
@@ -615,4 +538,8 @@ fn print_generation_metrics(r: &AnalysisReport, channel_format: &str, channel_la
         }
     }
     println!("{}", util::console::section("----------------------------"));
+}
+
+fn fmt_opt(value: Option<f32>, decimals: usize) -> Option<String> {
+    value.map(|v| format!("{:.*}", decimals, v))
 }

@@ -401,6 +401,7 @@ fn image_source_paths(
     let direct = distance_m(source, mic).max(0.01);
     let mut out = Vec::with_capacity(6);
 
+    // Image-source-lite: first-order reflections only. Fast, deterministic, and no pretend ray tracer.
     for axis in 0..3 {
         let half = room.half_extents_m[axis];
         for (wall_idx, wall_sign) in [1.0f32, -1.0f32].iter().enumerate() {
@@ -458,6 +459,7 @@ fn geometry_model(
         let distance_gain = 1.0 / (1.0 + 0.08 * (dist_m - 1.0).max(0.0));
 
         // Higher distances introduce progressively stronger HF absorption.
+        // Yes, this is a pragmatic air-loss curve, not an ISO dissertation.
         let dist_excess = (dist_m - 1.0).max(0.0);
         let air_blend =
             (dist_excess / 30.0).clamp(0.0, 0.75) * (0.35 + 0.65 * hf_damping.clamp(0.0, 1.0));
