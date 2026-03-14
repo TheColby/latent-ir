@@ -8,7 +8,7 @@ use crate::core::conditioning::{
     JsonTextConditioningModel, LearnedAudioEncoder, LearnedTextEncoder, OnnxAudioConditioningModel,
     OnnxTextConditioningModel, SemanticConditioningModel,
 };
-use crate::core::descriptors::{ChannelFormat, DescriptorSet};
+use crate::core::descriptors::{CartesianPosition, ChannelFormat, DescriptorSet};
 use crate::core::generator::{generate_with_macro_trajectory, IrGenerator, ProceduralIrGenerator};
 use crate::core::perceptual::{MacroControls, MacroTrajectory};
 use crate::core::presets;
@@ -154,6 +154,15 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         args.decorrelation,
         None,
     );
+
+    descriptor.spatial.source_position_m =
+        parse_position_triplet("source", args.source_x_m, args.source_y_m, args.source_z_m)?;
+    descriptor.spatial.listener_position_m = parse_position_triplet(
+        "listener",
+        args.listener_x_m,
+        args.listener_y_m,
+        args.listener_z_m,
+    )?;
     descriptor.clamp();
 
     let generator = ProceduralIrGenerator::new(args.sample_rate);
@@ -234,8 +243,29 @@ fn channel_format_from_arg(arg: ChannelFormatArg) -> ChannelFormat {
     }
 }
 
+fn parse_position_triplet(
+    prefix: &str,
+    x: Option<f32>,
+    y: Option<f32>,
+    z: Option<f32>,
+) -> Result<Option<CartesianPosition>> {
+    match (x, y, z) {
+        (None, None, None) => Ok(None),
+        (Some(x), Some(y), Some(z)) => Ok(Some(CartesianPosition { x, y, z })),
+        _ => anyhow::bail!(
+            "{prefix} position requires all three coordinates: --{prefix}-x-m --{prefix}-y-m --{prefix}-z-m"
+        ),
+    }
+}
+
 fn print_generation_metrics(r: &AnalysisReport, channel_format: &str, channel_labels: &[String]) {
     println!("{}", util::console::section("--- generated IR metrics ---"));
+    println!(
+        "{}",
+        util::console::warning(
+            "metrics_note: engineering estimates for v0 (not standards-certified architectural acoustics metrology)"
+        )
+    );
     println!("{}", util::console::metric("sample_rate_hz", r.sample_rate));
     println!(
         "{}",
@@ -326,6 +356,96 @@ fn print_generation_metrics(r: &AnalysisReport, channel_format: &str, channel_la
         util::console::metric(
             "inter_channel_corr_min_abs",
             match r.inter_channel_correlation_min_abs {
+                Some(v) => format!("{v:.5}"),
+                None => "n/a".to_string(),
+            }
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "arrival_min_ms",
+            match r.arrival_min_ms {
+                Some(v) => format!("{v:.3}"),
+                None => "n/a".to_string(),
+            }
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "arrival_max_ms",
+            match r.arrival_max_ms {
+                Some(v) => format!("{v:.3}"),
+                None => "n/a".to_string(),
+            }
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "arrival_spread_ms",
+            match r.arrival_spread_ms {
+                Some(v) => format!("{v:.3}"),
+                None => "n/a".to_string(),
+            }
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "itd_01_ms",
+            match r.itd_01_ms {
+                Some(v) => format!("{v:.3}"),
+                None => "n/a".to_string(),
+            }
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "iacc_early_01",
+            match r.iacc_early_01 {
+                Some(v) => format!("{v:.5}"),
+                None => "n/a".to_string(),
+            }
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "inter_channel_itd_mean_abs_ms",
+            match r.inter_channel_itd_mean_abs_ms {
+                Some(v) => format!("{v:.3}"),
+                None => "n/a".to_string(),
+            }
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "inter_channel_itd_max_abs_ms",
+            match r.inter_channel_itd_max_abs_ms {
+                Some(v) => format!("{v:.3}"),
+                None => "n/a".to_string(),
+            }
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "inter_channel_iacc_early_mean",
+            match r.inter_channel_iacc_early_mean {
+                Some(v) => format!("{v:.5}"),
+                None => "n/a".to_string(),
+            }
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "inter_channel_iacc_early_min",
+            match r.inter_channel_iacc_early_min {
                 Some(v) => format!("{v:.5}"),
                 None => "n/a".to_string(),
             }

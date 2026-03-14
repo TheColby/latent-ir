@@ -97,6 +97,18 @@ Metrics are intentionally engineering-focused and deterministic:
 
 These are not standards-certified architectural acoustics measurements.
 
+Both `generate` and `analyze` surface this caveat directly in console output so downstream users do not mistake these values for certified metrology.
+
+## Render Strategy
+
+Render supports three concrete engines:
+
+- `direct`
+- `fft-partitioned`
+- `fft-streaming`
+
+`render --engine auto` selects an engine from input/IR/channel workload heuristics and reports the decision in console output. This keeps small jobs simple while scaling large multichannel jobs with lower memory pressure.
+
 ## Reproducibility Model
 
 A run is intended to be reproducible from:

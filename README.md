@@ -11,18 +11,18 @@
 - ML-facing conditioning resolves acoustic intent.
 - DSP synthesis constructs, constrains, and validates the final IR.
 
-This project is intentionally honest about scope: current releases are production-quality procedural DSP plus lightweight learned/rule-based conditioning hooks, not a foundation-model reverb system.
+This repository is intentionally honest about scope: current releases are production-grade procedural DSP with lightweight learned/rule-based conditioning hooks, not a foundation-model reverb engine.
 
 ## Thesis
 
-Most reverb workflows are static: fixed presets, static measured IR libraries, or opaque plugin internals.
+Most reverb workflows are static: fixed presets, fixed measured IR libraries, or opaque plugin internals.
 
 `latent-ir` treats reverberation as a **controllable acoustic design space**:
 
 - descriptor-conditioned
 - scriptable and reproducible
 - analyzable at scale
-- extensible for future learned modules
+- extensible toward learned modules
 
 ## Why This Repo Exists
 
@@ -40,15 +40,15 @@ Most reverb workflows are static: fixed presets, static measured IR libraries, o
   - built-ins: `mono`, `stereo`, `foa`, `5.1`, `7.1`, `7.1.4`, `7.2.4`
   - custom JSON layouts (`--channels custom --layout-json ...`)
 - Cartesian geometry support for custom layouts (`position_m`) with polar/cartesian consistency checks
-- Geometry-aware custom synthesis:
+- Geometry-aware synthesis:
   - distance-based delay
   - distance gain falloff
   - HF air-loss shaping
   - image-source-lite early reflections
-- Virtual source/listener controls for per-run geometry steering:
+- Virtual source/listener controls:
   - `--source-x-m --source-y-m --source-z-m`
   - `--listener-x-m --listener-y-m --listener-z-m`
-- Analysis reports (console + JSON) including:
+- Analysis reports (console + JSON):
   - EDT / T20 / T30 / T60 engineering estimates
   - predelay estimate, spectral centroid, low/mid/high decay summaries
   - inter-channel correlation matrix + summaries
@@ -88,6 +88,80 @@ Primary modules:
 - `src/core/morph`: IR + descriptor interpolation
 - `src/core/render`: offline convolution paths
 
+## Launch-Ready Answers (Common Questions)
+
+### 1) "Where are the audio demos?"
+
+Generate a reproducible local demo pack:
+
+```bash
+./scripts/generate_demo_pack.sh
+```
+
+This writes deterministic IR assets and analysis JSON to `out/demos/`, suitable for A/B posting with your own dry material.
+
+### 2) "Is this really ML, or mostly DSP + rules?"
+
+Current status is explicit:
+
+- production path: procedural DSP synthesis
+- conditioning: presets + semantic rules + optional lightweight learned encoders
+- future path: richer learned models behind stable descriptor interfaces
+
+No hidden "black-box AI" claims in core generation.
+
+### 3) "How accurate are your RT/EDT metrics?"
+
+Metrics are labeled and documented as **engineering estimates** for v0.
+They are deterministic and useful for workflow consistency, but are not standards-certified architectural acoustics metrology.
+
+### 4) "What exactly is implemented for spatial audio?"
+
+Supported layout modes and semantics are explicit:
+
+| Mode | Status | Notes |
+|---|---|---|
+| `mono`, `stereo` | implemented | standard IR generation/analysis/render |
+| `foa` (ambiX) | implemented | channel map + analysis integration |
+| `5.1`, `7.1`, `7.1.4`, `7.2.4` | implemented | bed-style channels, directional metrics via map |
+| `custom` | implemented | JSON layout with `position_m` and/or az/el |
+| object-based Atmos renderer | not implemented | non-goal in current scope |
+
+For custom arrays, `position_m` is authoritative when provided.
+
+### 5) "How does this fit a real production workflow?"
+
+Typical loop:
+
+1. `generate` IR variants from prompts/presets/overrides.
+2. `analyze` and filter with JSON metrics.
+3. `morph` candidate IRs.
+4. `render` dry stems offline (direct/FFT/streaming).
+5. audition in DAW or convolution host.
+
+### 6) "Can this scale for long multichannel jobs?"
+
+Yes, via render engines and auto-selection:
+
+- small jobs: `direct`
+- medium jobs: `fft-partitioned`
+- large jobs: `fft-streaming` (block-wise, reduced memory pressure)
+- `render --engine auto` now chooses engine based on workload size and reports the selected mode.
+
+### 7) "Install friction / PATH issues"
+
+Use install helper:
+
+```bash
+./scripts/install_local.sh
+```
+
+If needed, add cargo bin path:
+
+```bash
+export PATH="$HOME/.cargo/bin:$PATH"
+```
+
 ## Current Status
 
 Implemented:
@@ -96,11 +170,11 @@ Implemented:
 - spatial layouts including custom geometry
 - image-source-lite early reflection augmentation for custom geometry paths
 - rich analysis metrics and JSON output schema
-- robust render paths including streaming FFT for multichannel long-form use
+- render paths including streaming FFT for multichannel long-form use
 - learned encoder training/eval baseline workflow
 - CI regression gates
 
-Not implemented (by design at current stage):
+Not implemented (by design in current stage):
 
 - full geometric acoustics simulation
 - standards-certified room-acoustics metrology
@@ -110,19 +184,19 @@ Not implemented (by design at current stage):
 
 Prerequisite: Rust stable toolchain (`rustup`, `cargo`).
 
-Build:
+Install from source tree:
 
 ```bash
-cargo build --release
+cargo install --path . --locked
 ```
 
-Run CLI help:
+Verify:
 
 ```bash
-cargo run -- --help
+latent-ir --help
 ```
 
-If installed binaries are not found, ensure your cargo bin path is on `PATH` (for example `~/.cargo/bin`).
+If `latent-ir` is not found, ensure cargo bin is on `PATH` (`~/.cargo/bin`).
 
 ## Build and Test
 
@@ -245,7 +319,7 @@ cargo run -- render long_program.wav \
 ## Command Reference
 
 - `generate`
-  - Inputs: optional `--prompt`, `--preset`, learned models (`--text-encoder-model`, `--audio-encoder-model`, optional ONNX variants), descriptor overrides (`--duration`, `--t60`, `--predelay-ms`, etc.), channel layout options, geometry controls, seed, sample rate
+  - Inputs: prompt/preset, learned models (JSON or optional ONNX), descriptor overrides, channel layout options, geometry controls, seed, sample rate
   - Outputs: WAV IR, metadata JSON, channel-map JSON, optional analysis JSON
   - Console: detailed metrics (decay, spectral, spatial/correlation, arrival/ITD/IACC)
 - `analyze`
@@ -274,7 +348,7 @@ cargo run -- render long_program.wav \
 
 ## Presets and Prompt Ideas
 
-Built-in presets include:
+Built-in presets:
 
 - `intimate_wood_chapel`
 - `dark_stone_cathedral`
@@ -283,7 +357,7 @@ Built-in presets include:
 - `frozen_plate`
 - `impossible_infinite_tunnel`
 
-Prompt ideas:
+Prompt ideas (free-form text):
 
 - `vast icy cathedral with long tail and soft highs`
 - `massive poured concrete grain silo, rt60 around 27 seconds`
@@ -293,7 +367,7 @@ Prompt ideas:
 
 ## Limitations and Honesty
 
-- v0/v0.1 remains DSP-first with rule-based and lightweight learned conditioning.
+- v0 remains DSP-first with rule-based and lightweight learned conditioning.
 - Acoustic metrics are engineering estimates for workflow consistency, not standards certification.
 - Geometry-driven early reflections use image-source-lite first-order approximations, not full wave/geometric simulation.
 - Spatial outputs are channel-layout projections; this is not an object-based Atmos renderer.
@@ -308,6 +382,8 @@ See:
 - [docs/learned-encoders.md](docs/learned-encoders.md)
 - [docs/perceptual-controls.md](docs/perceptual-controls.md)
 - [docs/model-manifests.md](docs/model-manifests.md)
+- [docs/spatial-layouts.md](docs/spatial-layouts.md)
+- [docs/launch-readiness.md](docs/launch-readiness.md)
 
 ## Contributing
 

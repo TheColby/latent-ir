@@ -34,6 +34,12 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
         );
         println!(
             "{}",
+            util::console::warning(
+                "metrics_note: engineering estimates for v0 (not standards-certified architectural acoustics metrology)"
+            )
+        );
+        println!(
+            "{}",
             util::console::metric("sample_rate", report.sample_rate)
         );
         if let Some(map) = channel_map.as_ref() {
@@ -121,6 +127,96 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
                 report
                     .inter_channel_correlation_min_abs
                     .map(|v| format!("{v:.4}"))
+                    .unwrap_or_else(|| "n/a".to_string())
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "arrival_min_ms",
+                report
+                    .arrival_min_ms
+                    .map(|v| format!("{v:.3}"))
+                    .unwrap_or_else(|| "n/a".to_string())
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "arrival_max_ms",
+                report
+                    .arrival_max_ms
+                    .map(|v| format!("{v:.3}"))
+                    .unwrap_or_else(|| "n/a".to_string())
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "arrival_spread_ms",
+                report
+                    .arrival_spread_ms
+                    .map(|v| format!("{v:.3}"))
+                    .unwrap_or_else(|| "n/a".to_string())
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "itd_01_ms",
+                report
+                    .itd_01_ms
+                    .map(|v| format!("{v:.3}"))
+                    .unwrap_or_else(|| "n/a".to_string())
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "iacc_early_01",
+                report
+                    .iacc_early_01
+                    .map(|v| format!("{v:.5}"))
+                    .unwrap_or_else(|| "n/a".to_string())
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "inter_channel_itd_mean_abs_ms",
+                report
+                    .inter_channel_itd_mean_abs_ms
+                    .map(|v| format!("{v:.3}"))
+                    .unwrap_or_else(|| "n/a".to_string())
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "inter_channel_itd_max_abs_ms",
+                report
+                    .inter_channel_itd_max_abs_ms
+                    .map(|v| format!("{v:.3}"))
+                    .unwrap_or_else(|| "n/a".to_string())
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "inter_channel_iacc_early_mean",
+                report
+                    .inter_channel_iacc_early_mean
+                    .map(|v| format!("{v:.5}"))
+                    .unwrap_or_else(|| "n/a".to_string())
+            )
+        );
+        println!(
+            "{}",
+            util::console::metric(
+                "inter_channel_iacc_early_min",
+                report
+                    .inter_channel_iacc_early_min
+                    .map(|v| format!("{v:.5}"))
                     .unwrap_or_else(|| "n/a".to_string())
             )
         );

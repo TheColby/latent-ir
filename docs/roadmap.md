@@ -27,6 +27,7 @@ Delivered in this phase so far:
 - Model manifest validation (`model validate`)
 - CI regression gates (`eval check`, `benchmark check`)
 - Streaming FFT render mode (`render --engine fft-streaming`)
+- Workload-aware render auto-selection (`direct` / `fft-partitioned` / `fft-streaming`)
 - Custom layout ingestion with polar/cartesian validation
 - Spatial channel-map sidecar emission/ingestion
 - Spatial corpus envelope regression tests
@@ -36,6 +37,7 @@ Delivered in this phase so far:
   - image-source-lite early reflections
 - Virtual source/listener controls
 - Arrival spread + ITD/IACC-style analysis metrics
+- Reproducible demo-pack + install helper scripts for release readiness
 
 Remaining high-impact items for v0.3:
 
