@@ -2,6 +2,12 @@ use anyhow::{anyhow, Result};
 use hound::{SampleFormat, WavReader, WavSpec, WavWriter};
 use std::path::Path;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResampleMode {
+    Linear,
+    Cubic,
+}
+
 #[derive(Debug, Clone)]
 pub struct AudioBuffer {
     pub sample_rate: u32,
@@ -77,12 +83,24 @@ pub fn write_wav_f32(
 }
 
 pub fn resample_linear(channels: &[Vec<f32>], src_rate: u32, dst_rate: u32) -> Vec<Vec<f32>> {
+    resample(channels, src_rate, dst_rate, ResampleMode::Linear)
+}
+
+pub fn resample(
+    channels: &[Vec<f32>],
+    src_rate: u32,
+    dst_rate: u32,
+    mode: ResampleMode,
+) -> Vec<Vec<f32>> {
     if src_rate == dst_rate {
         return channels.to_vec();
     }
     channels
         .iter()
-        .map(|ch| resample_channel_linear(ch, src_rate, dst_rate))
+        .map(|ch| match mode {
+            ResampleMode::Linear => resample_channel_linear(ch, src_rate, dst_rate),
+            ResampleMode::Cubic => resample_channel_cubic(ch, src_rate, dst_rate),
+        })
         .collect()
 }
 
@@ -110,4 +128,53 @@ fn resample_channel_linear(input: &[f32], src_rate: u32, dst_rate: u32) -> Vec<f
     }
 
     out
+}
+
+fn resample_channel_cubic(input: &[f32], src_rate: u32, dst_rate: u32) -> Vec<f32> {
+    if input.is_empty() {
+        return Vec::new();
+    }
+    if src_rate == dst_rate {
+        return input.to_vec();
+    }
+
+    let ratio = dst_rate as f64 / src_rate as f64;
+    let out_len = ((input.len() as f64) * ratio).round().max(1.0) as usize;
+    let mut out = vec![0.0f32; out_len];
+
+    for (i, sample) in out.iter_mut().enumerate() {
+        let src_pos = (i as f64) / ratio;
+        let x1 = src_pos.floor() as isize;
+        let t = (src_pos - x1 as f64) as f32;
+
+        let p0 = sample_at(input, x1 - 1);
+        let p1 = sample_at(input, x1);
+        let p2 = sample_at(input, x1 + 1);
+        let p3 = sample_at(input, x1 + 2);
+
+        *sample = catmull_rom(p0, p1, p2, p3, t);
+    }
+
+    out
+}
+
+fn sample_at(input: &[f32], idx: isize) -> f32 {
+    if idx <= 0 {
+        return input[0];
+    }
+    let i = idx as usize;
+    if i >= input.len() {
+        input[input.len() - 1]
+    } else {
+        input[i]
+    }
+}
+
+fn catmull_rom(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 {
+    let t2 = t * t;
+    let t3 = t2 * t;
+    0.5 * ((2.0 * p1)
+        + (-p0 + p2) * t
+        + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
+        + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3)
 }

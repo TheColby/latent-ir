@@ -1,4 +1,4 @@
-use crate::core::descriptors::DescriptorSet;
+use crate::core::descriptors::{ChannelFormat, DescriptorSet};
 
 #[derive(Debug, Default)]
 pub struct SemanticResolver;
@@ -17,6 +17,16 @@ impl SemanticResolver {
 }
 
 fn apply_phrase_rules(prompt: &str, d: &mut DescriptorSet) {
+    if prompt.contains("7.2.4") || prompt.contains("7_2_4") {
+        d.spatial.channel_format = ChannelFormat::Atmos7_2_4;
+    } else if prompt.contains("7.1.4") || prompt.contains("7_1_4") {
+        d.spatial.channel_format = ChannelFormat::Atmos7_1_4;
+    } else if prompt.contains("7.1") || prompt.contains("7_1") {
+        d.spatial.channel_format = ChannelFormat::Surround7_1;
+    } else if prompt.contains("5.1") || prompt.contains("5_1") {
+        d.spatial.channel_format = ChannelFormat::Surround5_1;
+    }
+
     if prompt.contains("grain silo") || prompt.contains("silo") {
         d.time.t60 += 3.2;
         d.time.predelay_ms += 22.0;
@@ -114,6 +124,15 @@ fn apply_token_rules(tokens: &[String], d: &mut DescriptorSet) {
                 d.spectral.brightness += 0.2;
                 d.spectral.hf_damping -= 0.15;
             }
+            "mono" => {
+                d.spatial.channel_format = ChannelFormat::Mono;
+            }
+            "stereo" => {
+                d.spatial.channel_format = ChannelFormat::Stereo;
+            }
+            "foa" | "ambix" | "ambisonic" => {
+                d.spatial.channel_format = ChannelFormat::FoaAmbix;
+            }
             "massive" | "colossal" | "vast" | "huge" | "cavernous" => {
                 d.time.t60 += 1.8;
                 d.time.duration += 1.5;
@@ -128,6 +147,12 @@ fn apply_numeric_rules(prompt: &str, tokens: &[String], d: &mut DescriptorSet) {
     if let Some(rt60) = extract_rt60(tokens) {
         d.time.t60 = rt60;
         d.time.duration = d.time.duration.max((rt60 * 1.1).min(30.0));
+    }
+    if let Some(predelay_ms) = extract_predelay_ms(tokens) {
+        d.time.predelay_ms = predelay_ms;
+    }
+    if let Some(duration_s) = extract_duration_s(tokens) {
+        d.time.duration = duration_s;
     }
 
     if prompt.contains("concrete") {
@@ -199,6 +224,61 @@ fn extract_thickness_m(tokens: &[String]) -> Option<f32> {
             _ => continue,
         };
         return Some(meters.max(0.0));
+    }
+    None
+}
+
+fn extract_predelay_ms(tokens: &[String]) -> Option<f32> {
+    for i in 0..tokens.len() {
+        let Some(v) = parse_f32(&tokens[i]) else {
+            continue;
+        };
+        if i + 1 >= tokens.len() {
+            continue;
+        }
+        let unit = tokens[i + 1].as_str();
+        let context_start = i.saturating_sub(3);
+        let ctx = &tokens[context_start..i];
+        let has_predelay_context = ctx
+            .iter()
+            .any(|t| t == "predelay" || t == "delay" || (t == "pre" && i > 0));
+        if !has_predelay_context {
+            continue;
+        }
+        let ms = match unit {
+            "ms" | "millisecond" | "milliseconds" => v,
+            "s" | "sec" | "second" | "seconds" => v * 1000.0,
+            _ => continue,
+        };
+        return Some(ms.clamp(0.0, 500.0));
+    }
+    None
+}
+
+fn extract_duration_s(tokens: &[String]) -> Option<f32> {
+    for i in 0..tokens.len() {
+        let Some(v) = parse_f32(&tokens[i]) else {
+            continue;
+        };
+        if i + 1 >= tokens.len() {
+            continue;
+        }
+        let unit = tokens[i + 1].as_str();
+        let seconds = match unit {
+            "s" | "sec" | "second" | "seconds" => v,
+            "min" | "minute" | "minutes" => v * 60.0,
+            _ => continue,
+        };
+        let context_start = i.saturating_sub(3);
+        let ctx = &tokens[context_start..i];
+        let has_duration_context = ctx
+            .iter()
+            .any(|t| t == "duration" || t == "length" || t == "long" || t == "tail" || t == "ir");
+        let has_rt60_context = ctx.iter().any(|t| t == "rt60" || t == "t60");
+        if has_rt60_context || !has_duration_context {
+            continue;
+        }
+        return Some(seconds.clamp(0.1, 30.0));
     }
     None
 }

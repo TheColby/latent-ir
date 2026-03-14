@@ -4,9 +4,9 @@ use chrono::Utc;
 use crate::cli::{ChannelFormatArg, GenerateArgs};
 use crate::core::analysis::{AnalysisReport, IrAnalyzer};
 use crate::core::conditioning::{
-    run_conditioning_chain, ConditioningContext, ConditioningModel, JsonAudioConditioningModel,
-    JsonTextConditioningModel, LearnedAudioEncoder, LearnedTextEncoder, OnnxAudioConditioningModel,
-    OnnxTextConditioningModel, SemanticConditioningModel,
+    run_conditioning_chain, ConditioningContext, ConditioningModel, DescriptorDelta,
+    JsonAudioConditioningModel, JsonTextConditioningModel, LearnedAudioEncoder, LearnedTextEncoder,
+    OnnxAudioConditioningModel, OnnxTextConditioningModel, SemanticConditioningModel,
 };
 use crate::core::descriptors::{CartesianPosition, ChannelFormat, DescriptorSet};
 use crate::core::generator::{generate_with_macro_trajectory, IrGenerator, ProceduralIrGenerator};
@@ -20,6 +20,7 @@ use crate::core::util::{
 
 pub fn run(args: GenerateArgs) -> Result<()> {
     validate_generate_args(&args)?;
+    let replay_command = build_replay_command(&args);
     let mut descriptor = DescriptorSet::default();
     let mut conditioning = ConditioningTrace::default();
     let mut runtime_warnings = Vec::new();
@@ -73,7 +74,9 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         text_onnx_input_dim: args.text_encoder_onnx_input_dim,
     };
     let chain_out = run_conditioning_chain(&chain, &ctx)?;
-    chain_out.total_delta.apply_to(&mut descriptor, 1.0);
+    let combined_delta = chain_out.total_delta.clone();
+    combined_delta.apply_to(&mut descriptor, 1.0);
+    conditioning.combined_delta = Some(combined_delta);
 
     for (name, delta) in chain_out.by_model {
         match name.as_str() {
@@ -204,6 +207,7 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         project: "latent-ir".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         command: "generate".to_string(),
+        replay_command,
         seed: args.seed,
         prompt: args.prompt,
         preset: args.preset,
@@ -224,6 +228,11 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         .unwrap_or_else(|| util::metadata::companion_json_path(&args.output));
     util::json::write_pretty_json(&metadata_path, &metadata)?;
 
+    if args.explain_conditioning {
+        print_conditioning_summary(&metadata.conditioning);
+        print_descriptor_snapshot(&metadata.descriptor);
+    }
+
     if let Some(analysis_path) = args.json_analysis_out {
         util::json::write_pretty_json(&analysis_path, &metadata.analysis)?;
         println!("wrote analysis: {}", analysis_path.display());
@@ -238,6 +247,184 @@ pub fn run(args: GenerateArgs) -> Result<()> {
     println!("wrote metadata: {}", metadata_path.display());
     println!("wrote channel map: {}", channel_map_path.display());
     Ok(())
+}
+
+fn build_replay_command(args: &GenerateArgs) -> String {
+    let mut parts = vec!["latent-ir".to_string(), "generate".to_string()];
+    if args.explain_conditioning {
+        parts.push("--explain-conditioning".to_string());
+    }
+    if let Some(v) = args.prompt.as_deref() {
+        parts.push("--prompt".to_string());
+        parts.push(shell_quote(v));
+    }
+    if let Some(v) = args.text_encoder_model.as_deref() {
+        parts.push("--text-encoder-model".to_string());
+        parts.push(shell_quote(&v.display().to_string()));
+    }
+    if let Some(v) = args.audio_encoder_model.as_deref() {
+        parts.push("--audio-encoder-model".to_string());
+        parts.push(shell_quote(&v.display().to_string()));
+    }
+    if let Some(v) = args.reference_audio.as_deref() {
+        parts.push("--reference-audio".to_string());
+        parts.push(shell_quote(&v.display().to_string()));
+    }
+    if let Some(v) = args.preset.as_deref() {
+        parts.push("--preset".to_string());
+        parts.push(shell_quote(v));
+    }
+    if let Some(v) = args.duration {
+        parts.push("--duration".to_string());
+        parts.push(format!("{v}"));
+    }
+    if let Some(v) = args.t60 {
+        parts.push("--t60".to_string());
+        parts.push(format!("{v}"));
+    }
+    if let Some(v) = args.predelay_ms {
+        parts.push("--predelay-ms".to_string());
+        parts.push(format!("{v}"));
+    }
+    if let Some(v) = args.edt {
+        parts.push("--edt".to_string());
+        parts.push(format!("{v}"));
+    }
+    parts.push("--sample-rate".to_string());
+    parts.push(format!("{}", args.sample_rate));
+    parts.push("--seed".to_string());
+    parts.push(format!("{}", args.seed));
+    if args.allow_tail_truncation {
+        parts.push("--allow-tail-truncation".to_string());
+    }
+    if let Some(v) = args.layout_json.as_deref() {
+        parts.push("--layout-json".to_string());
+        parts.push(shell_quote(&v.display().to_string()));
+    }
+    if let Some(v) = args.source_x_m {
+        parts.push("--source-x-m".to_string());
+        parts.push(format!("{v}"));
+    }
+    if let Some(v) = args.source_y_m {
+        parts.push("--source-y-m".to_string());
+        parts.push(format!("{v}"));
+    }
+    if let Some(v) = args.source_z_m {
+        parts.push("--source-z-m".to_string());
+        parts.push(format!("{v}"));
+    }
+    if let Some(v) = args.listener_x_m {
+        parts.push("--listener-x-m".to_string());
+        parts.push(format!("{v}"));
+    }
+    if let Some(v) = args.listener_y_m {
+        parts.push("--listener-y-m".to_string());
+        parts.push(format!("{v}"));
+    }
+    if let Some(v) = args.listener_z_m {
+        parts.push("--listener-z-m".to_string());
+        parts.push(format!("{v}"));
+    }
+    parts.push("--channels".to_string());
+    parts.push(shell_quote(channel_arg_value(args.channels)));
+    parts.push("--output".to_string());
+    parts.push(shell_quote(&args.output.display().to_string()));
+    parts.join(" ")
+}
+
+fn channel_arg_value(arg: ChannelFormatArg) -> &'static str {
+    match arg {
+        ChannelFormatArg::Mono => "mono",
+        ChannelFormatArg::Stereo => "stereo",
+        ChannelFormatArg::Foa => "foa",
+        ChannelFormatArg::Surround5_1 => "5.1",
+        ChannelFormatArg::Surround7_1 => "7.1",
+        ChannelFormatArg::Atmos7_1_4 => "7.1.4",
+        ChannelFormatArg::Atmos7_2_4 => "7.2.4",
+        ChannelFormatArg::Custom => "custom",
+    }
+}
+
+fn shell_quote(s: &str) -> String {
+    if s.chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.' || c == '/')
+    {
+        return s.to_string();
+    }
+    format!("'{}'", s.replace('\'', "'\"'\"'"))
+}
+
+fn print_conditioning_summary(c: &ConditioningTrace) {
+    println!("{}", util::console::section("--- conditioning summary ---"));
+    println!(
+        "{}",
+        util::console::metric(
+            "text_encoder_model",
+            c.text_encoder_model.as_deref().unwrap_or("n/a")
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "audio_encoder_model",
+            c.audio_encoder_model.as_deref().unwrap_or("n/a")
+        )
+    );
+    print_delta("combined_delta", c.combined_delta.as_ref());
+    print_delta("text_delta", c.text_delta.as_ref());
+    print_delta("audio_delta", c.audio_delta.as_ref());
+    println!("{}", util::console::section("----------------------------"));
+}
+
+fn print_delta(name: &str, delta: Option<&DescriptorDelta>) {
+    let Some(d) = delta else {
+        println!("{}", util::console::metric(name, "n/a"));
+        return;
+    };
+    println!(
+        "{}",
+        util::console::metric(
+            name,
+            format!(
+                "t60={:+.3}, predelay_ms={:+.3}, brightness={:+.3}, diffusion={:+.3}, width={:+.3}",
+                d.t60, d.predelay_ms, d.brightness, d.diffusion, d.width
+            )
+        )
+    );
+}
+
+fn print_descriptor_snapshot(d: &DescriptorSet) {
+    println!("{}", util::console::section("--- resolved descriptor ---"));
+    println!(
+        "{}",
+        util::console::metric(
+            "time",
+            format!(
+                "duration={:.3}s, t60={:.3}s, predelay={:.2}ms, edt={:.3}s",
+                d.time.duration, d.time.t60, d.time.predelay_ms, d.time.edt
+            )
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "spectral",
+            format!(
+                "brightness={:.3}, hf_damping={:.3}, lf_bloom={:.3}",
+                d.spectral.brightness, d.spectral.hf_damping, d.spectral.lf_bloom
+            )
+        )
+    );
+    println!(
+        "{}",
+        util::console::metric(
+            "structural",
+            format!(
+                "early_density={:.3}, late_density={:.3}, diffusion={:.3}",
+                d.structural.early_density, d.structural.late_density, d.structural.diffusion
+            )
+        )
+    );
 }
 
 fn validate_generate_args(args: &GenerateArgs) -> Result<()> {
@@ -412,6 +599,18 @@ fn print_generation_metrics(r: &AnalysisReport, channel_format: &str, channel_la
     println!(
         "{}",
         util::console::metric("t60_s_est", format!("{:.4}", r.t60_s_est.unwrap_or(-1.0)))
+    );
+    println!(
+        "{}",
+        util::console::metric("decay_db_span", format!("{:.2}", r.decay_db_span))
+    );
+    println!(
+        "{}",
+        util::console::metric_opt("t60_confidence", fmt_opt(r.t60_confidence, 3))
+    );
+    println!(
+        "{}",
+        util::console::metric_opt("edt_confidence", fmt_opt(r.edt_confidence, 3))
     );
     println!(
         "{}",

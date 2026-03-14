@@ -16,6 +16,9 @@ pub struct AnalysisReport {
     pub t20_s_est: Option<f32>,
     pub t30_s_est: Option<f32>,
     pub t60_s_est: Option<f32>,
+    pub decay_db_span: f32,
+    pub t60_confidence: Option<f32>,
+    pub edt_confidence: Option<f32>,
     pub spectral_centroid_hz: f32,
     pub band_decay_low_s: Option<f32>,
     pub band_decay_mid_s: Option<f32>,
@@ -71,9 +74,25 @@ impl IrAnalyzer {
 
         let predelay_ms_est = estimate_predelay_ms(&mono, sample_rate);
         let (edt, t20, t30, t60) = estimate_decay_times(&mono, sample_rate);
+        let decay_db_span = estimate_decay_span_db(&mono);
+        let t60_confidence = t60.map(|_| estimate_t60_confidence(decay_db_span, t20, t30, edt));
+        let edt_confidence = edt.map(|_| estimate_edt_confidence(decay_db_span));
 
         if t60.is_none() {
             warnings.push("T60 estimate unavailable due to insufficient decay range".to_string());
+        } else if let Some(conf) = t60_confidence {
+            if conf < 0.35 {
+                warnings.push(format!(
+                    "T60 estimate is low-confidence (confidence={conf:.2}, decay_span_db={decay_db_span:.1})"
+                ));
+            }
+        }
+        if let Some(conf) = edt_confidence {
+            if conf < 0.35 {
+                warnings.push(format!(
+                    "EDT estimate is low-confidence (confidence={conf:.2}, decay_span_db={decay_db_span:.1})"
+                ));
+            }
         }
 
         let spectral_centroid_hz = estimate_centroid(&mono, sample_rate);
@@ -153,6 +172,9 @@ impl IrAnalyzer {
             t20_s_est: t20,
             t30_s_est: t30,
             t60_s_est: t60,
+            decay_db_span,
+            t60_confidence,
+            edt_confidence,
             spectral_centroid_hz,
             band_decay_low_s: low,
             band_decay_mid_s: mid,
@@ -179,6 +201,38 @@ impl IrAnalyzer {
             warnings,
         }
     }
+}
+
+fn estimate_decay_span_db(ir: &[f32]) -> f32 {
+    if ir.is_empty() {
+        return 0.0;
+    }
+    let edc = schroeder_db(ir);
+    let min_db = edc.iter().copied().fold(0.0f32, f32::min);
+    (-min_db).max(0.0)
+}
+
+fn estimate_edt_confidence(decay_span_db: f32) -> f32 {
+    ((decay_span_db - 8.0) / 24.0).clamp(0.0, 1.0)
+}
+
+fn estimate_t60_confidence(
+    decay_span_db: f32,
+    t20: Option<f32>,
+    t30: Option<f32>,
+    edt: Option<f32>,
+) -> f32 {
+    let mut c = ((decay_span_db - 15.0) / 45.0).clamp(0.0, 1.0);
+    if t30.is_some() {
+        c += 0.15;
+    }
+    if t20.is_some() {
+        c += 0.08;
+    }
+    if edt.is_some() {
+        c += 0.04;
+    }
+    c.clamp(0.0, 1.0)
 }
 
 fn directional_energy_ratios(

@@ -39,7 +39,9 @@ Delivered so far:
 - arrival spread + ITD/IACC-style metrics
 - generation guardrails for tail preservation
 - optional sample-rate auto-resampling for `render` and `morph`
+- selectable resample modes (`linear` / `cubic`) for reconciliation paths
 - expanded CLI warning surfacing and validation hints
+- analysis confidence metrics and replay-command metadata for reproducibility/transparency
 
 Remaining high-impact items for v0.3:
 

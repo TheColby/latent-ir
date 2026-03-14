@@ -181,6 +181,7 @@ fn build_generate_args(
 ) -> GenerateArgs {
     GenerateArgs {
         prompt: Some(args.prompt.clone()),
+        explain_conditioning: false,
         text_encoder_model,
         text_encoder_onnx: None,
         text_encoder_onnx_input_dim: 256,

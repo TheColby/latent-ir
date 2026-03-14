@@ -17,6 +17,7 @@ fn generate_writes_metadata_and_analysis_json() {
         "generate",
         "--prompt",
         "dark steel bunker",
+        "--explain-conditioning",
         "--seed",
         "99",
         "--duration",
@@ -39,8 +40,10 @@ fn generate_writes_metadata_and_analysis_json() {
     assert_eq!(meta["schema_version"], "latent-ir.generation.v1");
     assert_eq!(meta["command"], "generate");
     assert_eq!(meta["seed"], 99);
+    assert!(meta["replay_command"].is_string());
     assert!(meta["descriptor"].is_object());
     assert!(meta["analysis"].is_object());
+    assert!(meta["conditioning"]["combined_delta"].is_object());
 
     let analysis_text =
         std::fs::read_to_string(&analysis_path).expect("analysis json should exist");
@@ -543,6 +546,8 @@ fn render_auto_resamples_ir_when_sample_rates_mismatch() {
         "--ir",
         ir_path.to_str().expect("utf8"),
         "--auto-resample",
+        "--resample-mode",
+        "linear",
         "--output",
         out_path.to_str().expect("utf8"),
     ])
@@ -572,6 +577,8 @@ fn morph_auto_resamples_second_ir_when_sample_rates_mismatch() {
         "--alpha",
         "0.5",
         "--auto-resample",
+        "--resample-mode",
+        "cubic",
         "--output",
         out_path.to_str().expect("utf8"),
     ])

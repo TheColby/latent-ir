@@ -37,6 +37,7 @@ Most reverb workflows are static: fixed presets, fixed measured IR libraries, or
 - Canonical descriptor model (`DescriptorSet`) across time/spectral/structural/spatial domains
 - Deterministic procedural IR generation with seed control
 - Tail-protection guardrail in `generate` (opt out with `--allow-tail-truncation`)
+- Prompt parser extracts more explicit acoustic directives (for example RT60, predelay, duration, channel-hint tokens)
 - Spatial support:
   - built-ins: `mono`, `stereo`, `foa`, `5.1`, `7.1`, `7.1.4`, `7.2.4`
   - custom layouts via JSON (`--channels custom --layout-json ...`)
@@ -46,11 +47,12 @@ Most reverb workflows are static: fixed presets, fixed measured IR libraries, or
   - virtual source/listener controls
 - Analysis metrics (console + JSON):
   - EDT / T20 / T30 / T60 engineering estimates
+  - decay-span and confidence summaries for decay metrics
   - predelay, spectral centroid, low/mid/high decay summaries
   - inter-channel correlation + ITD/IACC-style coherence summaries
   - directional energy summaries with channel map
 - Render engines: `direct`, `fft-partitioned`, `fft-streaming`
-- `render` and `morph` optional sample-rate reconciliation via `--auto-resample`
+- `render` and `morph` optional sample-rate reconciliation via `--auto-resample --resample-mode linear|cubic`
 - Reproducible sidecars: metadata JSON, analysis JSON, channel map JSON
 
 ## Practical Guardrails
@@ -59,6 +61,7 @@ Most reverb workflows are static: fixed presets, fixed measured IR libraries, or
 - Tail-truncation risk is surfaced and auto-corrected by default.
 - Mixed sample-rate workflows get explicit guidance or optional auto-resampling.
 - Analysis caveats are always printed in console output.
+- Metadata now includes a replay command string and combined conditioning delta.
 
 ## Installation
 
@@ -108,6 +111,7 @@ Generate from prompt:
 ```bash
 cargo run -- generate \
   --prompt "vast icy cathedral" \
+  --explain-conditioning \
   --t60 12 \
   --channels stereo \
   --seed 1337 \
@@ -193,12 +197,30 @@ Metadata includes:
 - `generate`
   - supports prompt/preset/overrides/learned models/custom layout/geometry control
   - validates and reports descriptor corrections
+  - `--explain-conditioning` prints resolved conditioning deltas and descriptor snapshot
 - `analyze`
-  - prints metrics and warnings, supports JSON output
+  - prints metrics, confidence estimates, and warnings; supports JSON output
 - `morph`
-  - supports `--auto-resample` when IR sample rates differ
+  - supports `--auto-resample --resample-mode linear|cubic` when IR sample rates differ
 - `render`
-  - supports `--auto-resample` and workload-aware engine selection
+  - supports `--auto-resample --resample-mode linear|cubic` and workload-aware engine selection
+
+## Top 5 Likely Complaints (And What Is Implemented)
+
+1. “Prompt interpretation is too vague.”
+- Numeric prompt parsing now handles explicit RT60, predelay, duration, and channel-format hints.
+
+2. “RT metrics need trust context, not just numbers.”
+- Analysis now emits decay-span and confidence estimates (`t60_confidence`, `edt_confidence`) plus warning surfacing.
+
+3. “I can’t reproduce runs exactly.”
+- Generation metadata includes a replay command and full conditioning trace with combined delta.
+
+4. “Sample-rate mismatch handling is either brittle or low quality.”
+- `render`/`morph` now support optional auto-resampling with selectable mode (`linear` or `cubic`).
+
+5. “Conditioning changes are opaque.”
+- `generate --explain-conditioning` prints model usage, deltas, and resolved descriptor snapshot.
 
 ## Demo Pack
 

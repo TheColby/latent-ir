@@ -105,6 +105,18 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
         );
         println!(
             "{}",
+            util::console::metric("decay_db_span", format!("{:.2}", report.decay_db_span))
+        );
+        println!(
+            "{}",
+            util::console::metric_opt("t60_confidence", fmt_opt(report.t60_confidence, 3))
+        );
+        println!(
+            "{}",
+            util::console::metric_opt("edt_confidence", fmt_opt(report.edt_confidence, 3))
+        );
+        println!(
+            "{}",
             util::console::metric(
                 "spectral_centroid_hz",
                 format!("{:.1}", report.spectral_centroid_hz)

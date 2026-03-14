@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use hound::{SampleFormat, WavSpec, WavWriter};
 
-use crate::cli::{RenderArgs, RenderEngineArg};
+use crate::cli::{RenderArgs, RenderEngineArg, ResampleModeArg};
 use crate::core::render::{RenderEngine, RenderOptions, Renderer};
 use crate::core::util;
 
@@ -37,15 +37,18 @@ pub fn run(args: RenderArgs) -> Result<()> {
 
     if input.sample_rate != ir.sample_rate {
         if args.auto_resample {
+            let mode = resample_mode_from_arg(args.resample_mode);
             println!(
                 "{}",
                 util::console::warning(&format!(
-                    "auto-resampling IR from {} Hz to {} Hz (linear)",
-                    ir.sample_rate, input.sample_rate
+                    "auto-resampling IR from {} Hz to {} Hz ({})",
+                    ir.sample_rate,
+                    input.sample_rate,
+                    resample_mode_name(mode)
                 ))
             );
             ir.channels =
-                util::audio::resample_linear(&ir.channels, ir.sample_rate, input.sample_rate);
+                util::audio::resample(&ir.channels, ir.sample_rate, input.sample_rate, mode);
             ir.sample_rate = input.sample_rate;
         } else {
             anyhow::bail!(
@@ -148,6 +151,20 @@ fn render_engine_name(engine: RenderEngine) -> &'static str {
         RenderEngine::Direct => "direct",
         RenderEngine::FftPartitioned => "fft-partitioned",
         RenderEngine::FftStreaming => "fft-streaming",
+    }
+}
+
+fn resample_mode_from_arg(arg: ResampleModeArg) -> util::audio::ResampleMode {
+    match arg {
+        ResampleModeArg::Linear => util::audio::ResampleMode::Linear,
+        ResampleModeArg::Cubic => util::audio::ResampleMode::Cubic,
+    }
+}
+
+fn resample_mode_name(mode: util::audio::ResampleMode) -> &'static str {
+    match mode {
+        util::audio::ResampleMode::Linear => "linear",
+        util::audio::ResampleMode::Cubic => "cubic",
     }
 }
 

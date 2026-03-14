@@ -85,6 +85,7 @@ Analysis is deterministic and workflow-oriented.
 
 Key outputs include:
 - EDT / T20 / T30 / T60 estimates
+- decay-span and confidence estimates for decay metrics
 - predelay estimate
 - spectral centroid + band decay summaries
 - early/late energy summaries
@@ -122,6 +123,13 @@ Artifacts:
 - generation metadata JSON (`latent-ir.generation.v1`)
 - analysis JSON (`latent-ir.analysis.v1`)
 - channel map JSON (`latent-ir.channel-map.v1`)
+
+Generation metadata includes:
+- replay command string
+- conditioning trace (text/audio/combined deltas)
+- warnings and embedded analysis summary
+
+`generate --explain-conditioning` provides an interactive console view of this conditioning state.
 
 ## Extension Points
 

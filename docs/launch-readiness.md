@@ -15,6 +15,7 @@ This document is a practical pre-launch checklist for public announcements.
 3. How trustworthy are RT/EDT metrics?
 - Present them as deterministic engineering estimates.
 - Do not market them as certified architectural acoustics metrology.
+- Include confidence context (`decay_db_span`, `t60_confidence`, `edt_confidence`) when sharing metrics publicly.
 
 4. What spatial formats are truly supported?
 - Built-ins: `mono`, `stereo`, `foa`, `5.1`, `7.1`, `7.1.4`, `7.2.4`.
@@ -33,8 +34,12 @@ This document is a practical pre-launch checklist for public announcements.
 - Engine choice is reported in console.
 
 7. What about sample-rate mismatches?
-- Use `--auto-resample` for `render`/`morph` when needed.
+- Use `--auto-resample --resample-mode linear|cubic` for `render`/`morph` when needed.
 - Keep strict mode by default in automated pipelines when reproducibility requires exact inputs.
+
+8. Conditioning is a black box.
+- Use `generate --explain-conditioning` and include metadata deltas in release artifacts.
+- Mention whether semantic rules, learned text model, and/or learned audio model were active.
 
 8. PATH/install issues?
 - Use `./scripts/install_local.sh`.

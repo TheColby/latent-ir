@@ -9,6 +9,7 @@ These models are intentionally inspectable, deterministic, and local-first in v0
 - This is not a giant pretrained transformer stack in the generation path.
 - Learned modules currently modify descriptors before DSP synthesis.
 - No external AI service key is required for JSON-model workflows.
+- Conditioning traces are emitted to generation metadata (including combined total delta).
 
 ## Supported Families
 

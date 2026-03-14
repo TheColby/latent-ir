@@ -49,6 +49,25 @@ fn semantics_parses_concrete_thickness() {
 }
 
 #[test]
+fn semantics_parses_predelay_and_duration_from_prompt() {
+    let mut d = DescriptorSet::default();
+    SemanticResolver::default().apply_prompt("long ir duration 12 seconds, predelay 65 ms", &mut d);
+    assert!((d.time.duration - 12.0).abs() < 0.2);
+    assert!((d.time.predelay_ms - 65.0).abs() < 1.0);
+}
+
+#[test]
+fn semantics_resolves_channel_hints_from_prompt() {
+    let mut d = DescriptorSet::default();
+    SemanticResolver::default().apply_prompt("massive bunker in 7.2.4", &mut d);
+    assert_eq!(d.spatial.channel_format, ChannelFormat::Atmos7_2_4);
+
+    let mut e = DescriptorSet::default();
+    SemanticResolver::default().apply_prompt("stereo intimate wood chapel", &mut e);
+    assert_eq!(e.spatial.channel_format, ChannelFormat::Stereo);
+}
+
+#[test]
 fn deterministic_generation_by_seed() {
     let d = DescriptorSet::default();
     let g = ProceduralIrGenerator::new(48_000);
@@ -317,6 +336,9 @@ fn analysis_extracts_basic_metrics() {
     assert!(report.duration_s > 0.9);
     assert!(report.peak > 0.95);
     assert!(report.predelay_ms_est > 3.0);
+    assert!(report.decay_db_span > 10.0);
+    assert!(report.t60_confidence.unwrap_or(0.0) >= 0.0);
+    assert!(report.t60_confidence.unwrap_or(0.0) <= 1.0);
 }
 
 #[test]

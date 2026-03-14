@@ -14,6 +14,7 @@ pub struct GenerationMetadata {
     pub project: String,
     pub version: String,
     pub command: String,
+    pub replay_command: String,
     pub seed: u64,
     pub prompt: Option<String>,
     pub preset: Option<String>,
@@ -38,6 +39,7 @@ pub struct ConditioningTrace {
     pub reference_audio: Option<String>,
     pub text_delta: Option<DescriptorDelta>,
     pub audio_delta: Option<DescriptorDelta>,
+    pub combined_delta: Option<DescriptorDelta>,
     pub macro_controls: Option<MacroControls>,
     pub macro_trajectory: Option<String>,
 }

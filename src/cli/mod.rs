@@ -41,6 +41,10 @@ pub struct GenerateArgs {
     #[arg(long)]
     pub prompt: Option<String>,
 
+    /// Print resolved conditioning and descriptor deltas to console.
+    #[arg(long, default_value_t = false)]
+    pub explain_conditioning: bool,
+
     /// Path to a learned text encoder model JSON.
     #[arg(long)]
     pub text_encoder_model: Option<PathBuf>,
@@ -216,6 +220,10 @@ pub struct MorphArgs {
     #[arg(long, default_value_t = false)]
     pub auto_resample: bool,
 
+    /// Resampling mode when `--auto-resample` is enabled.
+    #[arg(long, value_enum, default_value_t = ResampleModeArg::Cubic)]
+    pub resample_mode: ResampleModeArg,
+
     /// Output WAV path.
     #[arg(short, long)]
     pub output: PathBuf,
@@ -245,6 +253,10 @@ pub struct RenderArgs {
     /// Automatically resample IR to match input sample rate when needed.
     #[arg(long, default_value_t = false)]
     pub auto_resample: bool,
+
+    /// Resampling mode when `--auto-resample` is enabled.
+    #[arg(long, value_enum, default_value_t = ResampleModeArg::Cubic)]
+    pub resample_mode: ResampleModeArg,
 
     /// Output WAV path.
     #[arg(short, long)]
@@ -566,4 +578,10 @@ pub enum RenderEngineArg {
     Direct,
     FftPartitioned,
     FftStreaming,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ResampleModeArg {
+    Linear,
+    Cubic,
 }

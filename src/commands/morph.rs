@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 
-use crate::cli::MorphArgs;
+use crate::cli::{MorphArgs, ResampleModeArg};
 use crate::core::morph::IrMorpher;
 use crate::core::util;
 
@@ -23,14 +23,17 @@ pub fn run(args: MorphArgs) -> Result<()> {
 
     if a.sample_rate != b.sample_rate {
         if args.auto_resample {
+            let mode = resample_mode_from_arg(args.resample_mode);
             println!(
                 "{}",
                 util::console::warning(&format!(
-                    "auto-resampling second IR from {} Hz to {} Hz (linear)",
-                    b.sample_rate, a.sample_rate
+                    "auto-resampling second IR from {} Hz to {} Hz ({})",
+                    b.sample_rate,
+                    a.sample_rate,
+                    resample_mode_name(mode)
                 ))
             );
-            b.channels = util::audio::resample_linear(&b.channels, b.sample_rate, a.sample_rate);
+            b.channels = util::audio::resample(&b.channels, b.sample_rate, a.sample_rate, mode);
             b.sample_rate = a.sample_rate;
         } else {
             anyhow::bail!(
@@ -46,4 +49,18 @@ pub fn run(args: MorphArgs) -> Result<()> {
         .with_context(|| format!("failed to write {}", args.output.display()))?;
     println!("wrote morphed IR: {}", args.output.display());
     Ok(())
+}
+
+fn resample_mode_from_arg(arg: ResampleModeArg) -> util::audio::ResampleMode {
+    match arg {
+        ResampleModeArg::Linear => util::audio::ResampleMode::Linear,
+        ResampleModeArg::Cubic => util::audio::ResampleMode::Cubic,
+    }
+}
+
+fn resample_mode_name(mode: util::audio::ResampleMode) -> &'static str {
+    match mode {
+        util::audio::ResampleMode::Linear => "linear",
+        util::audio::ResampleMode::Cubic => "cubic",
+    }
 }

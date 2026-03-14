@@ -113,5 +113,5 @@ This mirrors `.github/workflows/regression-gates.yml`.
 
 For release candidates:
 1. run full gates locally
-2. review warning deltas (not only pass/fail)
+2. review warning and confidence deltas (not only pass/fail)
 3. refresh baselines only when behavior changes are intentional and documented
