@@ -47,6 +47,9 @@ fn generate_writes_metadata_and_analysis_json() {
         serde_json::from_str(&analysis_text).expect("analysis should be valid json");
     assert_eq!(analysis["schema_version"], "latent-ir.analysis.v1");
     assert!(analysis["t60_s_est"].is_number() || analysis["t60_s_est"].is_null());
+    assert!(analysis["arrival_spread_ms"].is_number() || analysis["arrival_spread_ms"].is_null());
+    assert!(analysis["itd_01_ms"].is_number() || analysis["itd_01_ms"].is_null());
+    assert!(analysis["iacc_early_01"].is_number() || analysis["iacc_early_01"].is_null());
 }
 
 #[test]
@@ -269,5 +272,177 @@ fn generate_custom_layout_requires_layout_json() {
     .expect("parse should succeed");
 
     let err = dispatch(cli).expect_err("custom generation without layout should fail");
-    assert!(err.to_string().contains("--channels custom requires --layout-json"));
+    assert!(err
+        .to_string()
+        .contains("--channels custom requires --layout-json"));
+}
+
+#[test]
+fn generate_supports_cartesian_only_custom_layout() {
+    let dir = tempdir().expect("tempdir");
+    let ir_path = dir.path().join("cart.wav");
+    let meta_path = dir.path().join("cart.meta.json");
+    let map_path = dir.path().join("cart.channels.json");
+    let layout_path = dir.path().join("layout_cartesian_only.json");
+
+    let layout = r#"{
+  "schema_version": "latent-ir.layout.v1",
+  "layout_name": "quad_cartesian_only",
+  "spatial_encoding": "discrete",
+  "channels": [
+    {"label":"F","position_m":{"x":0.0,"y":2.0,"z":0.0}},
+    {"label":"R","position_m":{"x":2.0,"y":0.0,"z":0.0}},
+    {"label":"B","position_m":{"x":0.0,"y":-2.0,"z":0.0}},
+    {"label":"L","position_m":{"x":-2.0,"y":0.0,"z":0.0}}
+  ]
+}"#;
+    std::fs::write(&layout_path, layout).expect("write layout");
+
+    let cli = Cli::try_parse_from([
+        "latent-ir",
+        "generate",
+        "--prompt",
+        "compact industrial room",
+        "--duration",
+        "0.2",
+        "--channels",
+        "custom",
+        "--layout-json",
+        layout_path.to_str().expect("utf8"),
+        "--output",
+        ir_path.to_str().expect("utf8"),
+        "--metadata-out",
+        meta_path.to_str().expect("utf8"),
+        "--channel-map-out",
+        map_path.to_str().expect("utf8"),
+    ])
+    .expect("parse");
+
+    dispatch(cli).expect("generate should succeed");
+
+    let meta: Value = serde_json::from_str(&std::fs::read_to_string(&meta_path).unwrap()).unwrap();
+    assert_eq!(meta["channel_format"], "quad_cartesian_only");
+    assert_eq!(meta["analysis"]["channels"], 4);
+
+    let map: Value = serde_json::from_str(&std::fs::read_to_string(&map_path).unwrap()).unwrap();
+    let channels = map["channels"].as_array().expect("channels array");
+    assert_eq!(channels.len(), 4);
+
+    let az_f = channels[0]["azimuth_deg"].as_f64().unwrap() as f32;
+    let az_r = channels[1]["azimuth_deg"].as_f64().unwrap() as f32;
+    let az_b = channels[2]["azimuth_deg"].as_f64().unwrap() as f32;
+    let az_l = channels[3]["azimuth_deg"].as_f64().unwrap() as f32;
+
+    assert!((az_f - 0.0).abs() < 0.5);
+    assert!((az_r - 90.0).abs() < 0.5);
+    assert!((az_b - 180.0).abs() < 0.5 || (az_b + 180.0).abs() < 0.5);
+    assert!((az_l + 90.0).abs() < 0.5);
+    assert!(channels
+        .iter()
+        .all(|c| c["position_m"].is_object() && c["elevation_deg"].is_number()));
+}
+
+#[test]
+fn generate_rejects_inconsistent_polar_and_cartesian_layout() {
+    let dir = tempdir().expect("tempdir");
+    let ir_path = dir.path().join("bad.wav");
+    let layout_path = dir.path().join("layout_bad.json");
+
+    let bad_layout = r#"{
+  "schema_version": "latent-ir.layout.v1",
+  "layout_name": "bad_layout",
+  "spatial_encoding": "discrete",
+  "channels": [
+    {"label":"C0","azimuth_deg":0,"elevation_deg":0,"position_m":{"x":1.0,"y":0.0,"z":0.0}}
+  ]
+}"#;
+    std::fs::write(&layout_path, bad_layout).expect("write layout");
+
+    let cli = Cli::try_parse_from([
+        "latent-ir",
+        "generate",
+        "--prompt",
+        "bad geometry test",
+        "--channels",
+        "custom",
+        "--layout-json",
+        layout_path.to_str().expect("utf8"),
+        "--output",
+        ir_path.to_str().expect("utf8"),
+    ])
+    .expect("parse");
+
+    let err = dispatch(cli).expect_err("inconsistent layout should fail");
+    assert!(err
+        .to_string()
+        .contains("inconsistent polar/cartesian geometry"));
+}
+
+#[test]
+fn generate_accepts_virtual_source_and_listener_positions() {
+    let dir = tempdir().expect("tempdir");
+    let ir_path = dir.path().join("pos.wav");
+    let meta_path = dir.path().join("pos.meta.json");
+
+    let cli = Cli::try_parse_from([
+        "latent-ir",
+        "generate",
+        "--prompt",
+        "industrial hangar",
+        "--duration",
+        "0.2",
+        "--source-x-m",
+        "2.0",
+        "--source-y-m",
+        "9.0",
+        "--source-z-m",
+        "1.5",
+        "--listener-x-m",
+        "0.0",
+        "--listener-y-m",
+        "0.0",
+        "--listener-z-m",
+        "1.5",
+        "--output",
+        ir_path.to_str().expect("utf8"),
+        "--metadata-out",
+        meta_path.to_str().expect("utf8"),
+    ])
+    .expect("parse");
+
+    dispatch(cli).expect("generate should succeed");
+
+    let meta: Value = serde_json::from_str(&std::fs::read_to_string(&meta_path).unwrap()).unwrap();
+    let spatial = &meta["descriptor"]["spatial"];
+    assert_eq!(spatial["source_position_m"]["x"], 2.0);
+    assert_eq!(spatial["source_position_m"]["y"], 9.0);
+    assert_eq!(spatial["source_position_m"]["z"], 1.5);
+    assert_eq!(spatial["listener_position_m"]["x"], 0.0);
+    assert_eq!(spatial["listener_position_m"]["y"], 0.0);
+    assert_eq!(spatial["listener_position_m"]["z"], 1.5);
+}
+
+#[test]
+fn generate_rejects_partial_virtual_position_triplets() {
+    let dir = tempdir().expect("tempdir");
+    let ir_path = dir.path().join("partial.wav");
+
+    let cli = Cli::try_parse_from([
+        "latent-ir",
+        "generate",
+        "--prompt",
+        "invalid position test",
+        "--source-x-m",
+        "2.0",
+        "--source-y-m",
+        "1.0",
+        "--output",
+        ir_path.to_str().expect("utf8"),
+    ])
+    .expect("parse");
+
+    let err = dispatch(cli).expect_err("partial source position should fail");
+    assert!(err
+        .to_string()
+        .contains("source position requires all three coordinates"));
 }

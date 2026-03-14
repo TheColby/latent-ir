@@ -45,6 +45,10 @@ pub struct SpatialDescriptors {
     pub decorrelation: f32,
     pub asymmetry: f32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_position_m: Option<CartesianPosition>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub listener_position_m: Option<CartesianPosition>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub custom_layout: Option<CustomChannelLayout>,
 }
 
@@ -61,21 +65,30 @@ pub enum ChannelFormat {
     Custom,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ChannelSpec {
     pub label: String,
-    pub azimuth_deg: i16,
-    pub elevation_deg: i16,
+    pub azimuth_deg: f32,
+    pub elevation_deg: f32,
     #[serde(default)]
     pub is_lfe: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub position_m: Option<CartesianPosition>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CustomChannelLayout {
     pub layout_name: String,
     #[serde(default)]
     pub spatial_encoding: SpatialEncoding,
     pub channels: Vec<ChannelSpec>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub struct CartesianPosition {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
 }
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -259,9 +272,10 @@ impl SpatialDescriptors {
 fn ch(label: &str, azimuth_deg: i16, elevation_deg: i16, is_lfe: bool) -> ChannelSpec {
     ChannelSpec {
         label: label.to_string(),
-        azimuth_deg,
-        elevation_deg,
+        azimuth_deg: azimuth_deg as f32,
+        elevation_deg: elevation_deg as f32,
         is_lfe,
+        position_m: None,
     }
 }
 
@@ -297,6 +311,8 @@ impl Default for DescriptorSet {
                 width: 0.72,
                 decorrelation: 0.4,
                 asymmetry: 0.0,
+                source_position_m: None,
+                listener_position_m: None,
                 custom_layout: None,
             },
         }

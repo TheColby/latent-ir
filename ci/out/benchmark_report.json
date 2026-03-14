@@ -1,0 +1,39 @@
+{
+  "schema_version": "latent-ir.benchmark.v1",
+  "generated_at_utc": "2026-03-14T02:28:28.961821Z",
+  "dataset_path": "ci/datasets/benchmark_ci.json",
+  "sample_count": 3,
+  "repeats": 2,
+  "objective": {
+    "descriptor_mae": 0.092241116,
+    "descriptor_rmse": 0.29444113,
+    "analysis_mae": 13.101193,
+    "analysis_rmse": 43.78628
+  },
+  "speed": {
+    "encode_ms_avg": 0.023583665,
+    "generate_ms_avg": 232.35963,
+    "analyze_ms_avg": 80.718636,
+    "total_ms_avg": 1241.5809
+  },
+  "stability": {
+    "descriptor_std_avg": 0.0,
+    "analysis_std_avg": 2.479543
+  },
+  "perceptual_proxy": {
+    "proxy_mae": 0.038811464,
+    "per_proxy_mae": {
+      "brightness": 0.0059591033,
+      "clarity": 0.1326175,
+      "distance": 0.013923034,
+      "spaciousness": 0.0027462244
+    }
+  },
+  "summary": {
+    "objective_score": 13.193435,
+    "speed_score": 1.241581,
+    "stability_score": 2.479543,
+    "perceptual_score": 0.038811464,
+    "total_score": 16.95337
+  }
+}

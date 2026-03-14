@@ -5,7 +5,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::core::descriptors::{
-    ChannelSpec, CustomChannelLayout, SpatialDescriptors, SpatialEncoding,
+    CartesianPosition, ChannelSpec, CustomChannelLayout, SpatialDescriptors, SpatialEncoding,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -20,9 +20,11 @@ pub struct ChannelMap {
 pub struct ChannelMapEntry {
     pub index: usize,
     pub label: String,
-    pub azimuth_deg: i16,
-    pub elevation_deg: i16,
+    pub azimuth_deg: f32,
+    pub elevation_deg: f32,
     pub is_lfe: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub position_m: Option<CartesianPosition>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -38,10 +40,14 @@ struct LayoutFile {
 #[derive(Debug, Clone, Deserialize)]
 struct LayoutFileChannel {
     label: String,
-    azimuth_deg: i16,
-    elevation_deg: i16,
+    #[serde(default)]
+    azimuth_deg: Option<f32>,
+    #[serde(default)]
+    elevation_deg: Option<f32>,
     #[serde(default)]
     is_lfe: bool,
+    #[serde(default)]
+    position_m: Option<CartesianPosition>,
 }
 
 pub fn load_custom_layout_file(path: impl AsRef<Path>) -> Result<CustomChannelLayout> {
@@ -68,23 +74,77 @@ pub fn load_custom_layout_file(path: impl AsRef<Path>) -> Result<CustomChannelLa
         SpatialEncoding::Discrete
     };
 
+    let mut channels = Vec::with_capacity(raw.channels.len());
+    for c in raw.channels {
+        let (azimuth_deg, elevation_deg) = resolve_angles(&c)?;
+        channels.push(ChannelSpec {
+            label: c.label,
+            azimuth_deg,
+            elevation_deg,
+            is_lfe: c.is_lfe,
+            position_m: c.position_m,
+        });
+    }
+
     let layout = CustomChannelLayout {
         layout_name: raw.layout_name,
         spatial_encoding,
-        channels: raw
-            .channels
-            .into_iter()
-            .map(|c| ChannelSpec {
-                label: c.label,
-                azimuth_deg: c.azimuth_deg,
-                elevation_deg: c.elevation_deg,
-                is_lfe: c.is_lfe,
-            })
-            .collect(),
+        channels,
     };
 
     validate_custom_layout(&layout)?;
     Ok(layout)
+}
+
+fn resolve_angles(c: &LayoutFileChannel) -> Result<(f32, f32)> {
+    match (&c.position_m, c.azimuth_deg, c.elevation_deg) {
+        (Some(pos), Some(az), Some(el)) => {
+            let (d_az, d_el) = derive_angles_from_position(*pos)?;
+            let az_err = angular_abs_delta_deg(az, d_az);
+            let el_err = (el - d_el).abs();
+            anyhow::ensure!(
+                az_err <= 2.0 && el_err <= 2.0,
+                "channel '{}' has inconsistent polar/cartesian geometry: provided ({az:.3},{el:.3}) vs derived ({d_az:.3},{d_el:.3})",
+                c.label
+            );
+            Ok((d_az, d_el))
+        }
+        (Some(pos), _, _) => derive_angles_from_position(*pos),
+        (None, Some(az), Some(el)) => Ok((az, el)),
+        (None, Some(_), None) | (None, None, Some(_)) => Err(anyhow!(
+            "channel '{}' must provide both azimuth_deg and elevation_deg when position_m is omitted",
+            c.label
+        )),
+        (None, None, None) => Err(anyhow!(
+            "channel '{}' must provide either position_m or polar angles",
+            c.label
+        )),
+    }
+}
+
+fn derive_angles_from_position(pos: CartesianPosition) -> Result<(f32, f32)> {
+    let planar = (pos.x * pos.x + pos.y * pos.y).sqrt();
+    let radius = (planar * planar + pos.z * pos.z).sqrt();
+    anyhow::ensure!(
+        radius > 1e-6,
+        "position_m cannot be at the capture origin (0,0,0)"
+    );
+
+    // Internal convention: +Y is 0 deg azimuth, +X is +90 deg, +Z is elevation.
+    let azimuth_deg = pos.x.atan2(pos.y).to_degrees();
+    let elevation_deg = pos.z.atan2(planar.max(1e-9)).to_degrees();
+    Ok((azimuth_deg, elevation_deg))
+}
+
+fn angular_abs_delta_deg(a: f32, b: f32) -> f32 {
+    let mut d = (a - b) % 360.0;
+    if d > 180.0 {
+        d -= 360.0;
+    }
+    if d < -180.0 {
+        d += 360.0;
+    }
+    d.abs()
 }
 
 pub fn validate_custom_layout(layout: &CustomChannelLayout) -> Result<()> {
@@ -108,12 +168,12 @@ pub fn validate_custom_layout(layout: &CustomChannelLayout) -> Result<()> {
             "duplicate channel label '{label}'"
         );
         anyhow::ensure!(
-            (-180..=180).contains(&ch.azimuth_deg),
+            ch.azimuth_deg >= -180.0 && ch.azimuth_deg <= 180.0,
             "channel '{label}' azimuth {} out of range [-180, 180]",
             ch.azimuth_deg
         );
         anyhow::ensure!(
-            (-90..=90).contains(&ch.elevation_deg),
+            ch.elevation_deg >= -90.0 && ch.elevation_deg <= 90.0,
             "channel '{label}' elevation {} out of range [-90, 90]",
             ch.elevation_deg
         );
@@ -151,6 +211,7 @@ pub fn build_channel_map(spatial: &SpatialDescriptors) -> ChannelMap {
             azimuth_deg: c.azimuth_deg,
             elevation_deg: c.elevation_deg,
             is_lfe: c.is_lfe,
+            position_m: c.position_m,
         })
         .collect();
 
@@ -197,13 +258,13 @@ pub fn validate_channel_map(map: &ChannelMap, expected_channels: usize) -> Resul
             label
         );
         anyhow::ensure!(
-            (-180..=180).contains(&ch.azimuth_deg),
+            ch.azimuth_deg >= -180.0 && ch.azimuth_deg <= 180.0,
             "channel '{}' azimuth {} out of range [-180, 180]",
             label,
             ch.azimuth_deg
         );
         anyhow::ensure!(
-            (-90..=90).contains(&ch.elevation_deg),
+            ch.elevation_deg >= -90.0 && ch.elevation_deg <= 90.0,
             "channel '{}' elevation {} out of range [-90, 90]",
             label,
             ch.elevation_deg

@@ -40,6 +40,13 @@ pub struct AnalysisMetrics {
     pub per_metric_mae: BTreeMap<String, f32>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvalCheckResult {
+    pub passed: bool,
+    pub max_regression: f32,
+    pub regressions: Vec<String>,
+}
+
 pub fn evaluate_text(
     dataset_path: &Path,
     model_path: &Path,
@@ -111,6 +118,48 @@ pub fn evaluate_audio(
         descriptor_metrics,
         analysis_metrics,
     })
+}
+
+pub fn check_eval(
+    report: &BaselineReport,
+    baseline: &BaselineReport,
+    max_regression: f32,
+) -> EvalCheckResult {
+    let mut regressions = Vec::new();
+    check_metric(
+        "descriptor_metrics.mae",
+        report.descriptor_metrics.mae,
+        baseline.descriptor_metrics.mae,
+        max_regression,
+        &mut regressions,
+    );
+    check_metric(
+        "descriptor_metrics.rmse",
+        report.descriptor_metrics.rmse,
+        baseline.descriptor_metrics.rmse,
+        max_regression,
+        &mut regressions,
+    );
+    check_metric(
+        "analysis_metrics.mae",
+        report.analysis_metrics.mae,
+        baseline.analysis_metrics.mae,
+        max_regression,
+        &mut regressions,
+    );
+    check_metric(
+        "analysis_metrics.rmse",
+        report.analysis_metrics.rmse,
+        baseline.analysis_metrics.rmse,
+        max_regression,
+        &mut regressions,
+    );
+
+    EvalCheckResult {
+        passed: regressions.is_empty(),
+        max_regression,
+        regressions,
+    }
 }
 
 fn load_text_dataset(path: &Path) -> Result<Vec<TextTrainSample>> {
@@ -317,4 +366,23 @@ fn analysis_metric_names() -> [&'static str; 11] {
         "early_energy_ratio",
         "late_energy_ratio",
     ]
+}
+
+fn check_metric(
+    name: &str,
+    current: f32,
+    baseline: f32,
+    max_regression: f32,
+    regressions: &mut Vec<String>,
+) {
+    if baseline.abs() <= 1e-9 {
+        return;
+    }
+    let rel = (current - baseline) / baseline.abs();
+    if rel > max_regression {
+        regressions.push(format!(
+            "{name}: current={current:.6} baseline={baseline:.6} regression={:.2}%",
+            rel * 100.0
+        ));
+    }
 }

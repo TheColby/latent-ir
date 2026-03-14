@@ -1,0 +1,27 @@
+name: Regression Gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  regression-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Unit and integration tests
+        run: cargo test --quiet
+
+      - name: Eval/benchmark regression gates
+        run: ./scripts/ci_regression_gates.sh

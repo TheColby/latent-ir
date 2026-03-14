@@ -119,6 +119,30 @@ pub struct GenerateArgs {
     #[arg(long)]
     pub decorrelation: Option<f32>,
 
+    /// Virtual source X position in meters (layout coordinate frame).
+    #[arg(long)]
+    pub source_x_m: Option<f32>,
+
+    /// Virtual source Y position in meters (layout coordinate frame).
+    #[arg(long)]
+    pub source_y_m: Option<f32>,
+
+    /// Virtual source Z position in meters (layout coordinate frame).
+    #[arg(long)]
+    pub source_z_m: Option<f32>,
+
+    /// Listener/capture X position in meters (layout coordinate frame).
+    #[arg(long)]
+    pub listener_x_m: Option<f32>,
+
+    /// Listener/capture Y position in meters (layout coordinate frame).
+    #[arg(long)]
+    pub listener_y_m: Option<f32>,
+
+    /// Listener/capture Z position in meters (layout coordinate frame).
+    #[arg(long)]
+    pub listener_z_m: Option<f32>,
+
     /// Perceptual macro: perceived size [-1, 1].
     #[arg(long)]
     pub macro_size: Option<f32>,
@@ -308,6 +332,8 @@ pub enum EvalMode {
     Text(EvalTextArgs),
     /// Evaluate reference-audio-conditioned audio encoder.
     Audio(EvalAudioArgs),
+    /// Check an eval baseline report against a baseline and fail on regressions.
+    Check(EvalCheckArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -346,6 +372,19 @@ pub struct EvalAudioArgs {
     /// RNG seed for deterministic validation synthesis.
     #[arg(long, default_value_t = 1234)]
     pub seed: u64,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct EvalCheckArgs {
+    /// Candidate eval baseline report JSON path.
+    #[arg(long)]
+    pub report: PathBuf,
+    /// Baseline eval baseline report JSON path.
+    #[arg(long)]
+    pub baseline: PathBuf,
+    /// Allowed relative regression threshold (e.g. 0.05 == 5%).
+    #[arg(long, default_value_t = 0.05)]
+    pub max_regression: f32,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -512,4 +551,5 @@ pub enum RenderEngineArg {
     Auto,
     Direct,
     FftPartitioned,
+    FftStreaming,
 }

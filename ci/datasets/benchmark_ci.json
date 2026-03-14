@@ -1,0 +1,8 @@
+{
+  "schema_version": "latent-ir.benchmark.dataset.v1",
+  "samples": [
+    {"id": "ci_01", "prompt": "massive poured concrete silo"},
+    {"id": "ci_02", "prompt": "steel pipeline tunnel"},
+    {"id": "ci_03", "prompt": "dark stone cathedral"}
+  ]
+}

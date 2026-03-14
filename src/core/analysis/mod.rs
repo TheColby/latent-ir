@@ -26,6 +26,15 @@ pub struct AnalysisReport {
     pub inter_channel_correlation_matrix: Option<Vec<Vec<f32>>>,
     pub inter_channel_correlation_mean_abs: Option<f32>,
     pub inter_channel_correlation_min_abs: Option<f32>,
+    pub arrival_min_ms: Option<f32>,
+    pub arrival_max_ms: Option<f32>,
+    pub arrival_spread_ms: Option<f32>,
+    pub itd_01_ms: Option<f32>,
+    pub iacc_early_01: Option<f32>,
+    pub inter_channel_itd_mean_abs_ms: Option<f32>,
+    pub inter_channel_itd_max_abs_ms: Option<f32>,
+    pub inter_channel_iacc_early_mean: Option<f32>,
+    pub inter_channel_iacc_early_min: Option<f32>,
     pub front_energy_ratio: Option<f32>,
     pub rear_energy_ratio: Option<f32>,
     pub height_energy_ratio: Option<f32>,
@@ -77,6 +86,27 @@ impl IrAnalyzer {
         };
 
         let (corr_matrix, corr_mean_abs, corr_min_abs) = inter_channel_correlation(channels);
+        let (arrival_min_ms, arrival_max_ms, arrival_spread_ms) =
+            arrival_spread_metrics(channels, sample_rate);
+        let (itd_01_ms, iacc_early_01) = if c >= 2 {
+            if let Some((lag_ms, iacc)) =
+                estimate_itd_iacc(&channels[0], &channels[1], sample_rate, 0.08, 0.001)
+            {
+                (Some(lag_ms), Some(iacc))
+            } else {
+                (None, None)
+            }
+        } else {
+            (None, None)
+        };
+        let (
+            inter_channel_itd_mean_abs_ms,
+            inter_channel_itd_max_abs_ms,
+            inter_channel_iacc_early_mean,
+            inter_channel_iacc_early_min,
+            sampled_pairs,
+            total_pairs,
+        ) = inter_channel_itd_iacc_metrics(channels, sample_rate, 0.08, 0.001, 96);
 
         let (front_energy_ratio, rear_energy_ratio, height_energy_ratio, lfe_energy_ratio) =
             if let Some(map) = channel_map {
@@ -105,6 +135,11 @@ impl IrAnalyzer {
                     .to_string(),
             );
         }
+        if sampled_pairs < total_pairs {
+            warnings.push(format!(
+                "inter-channel ITD/IACC metrics sampled {sampled_pairs}/{total_pairs} pairs"
+            ));
+        }
 
         AnalysisReport {
             schema_version: "latent-ir.analysis.v1".to_string(),
@@ -128,6 +163,15 @@ impl IrAnalyzer {
             inter_channel_correlation_matrix: corr_matrix,
             inter_channel_correlation_mean_abs: corr_mean_abs,
             inter_channel_correlation_min_abs: corr_min_abs,
+            arrival_min_ms,
+            arrival_max_ms,
+            arrival_spread_ms,
+            itd_01_ms,
+            iacc_early_01,
+            inter_channel_itd_mean_abs_ms,
+            inter_channel_itd_max_abs_ms,
+            inter_channel_iacc_early_mean,
+            inter_channel_iacc_early_min,
             front_energy_ratio,
             rear_energy_ratio,
             height_energy_ratio,
@@ -160,9 +204,9 @@ fn directional_energy_ratios(
 
         if entry.is_lfe {
             lfe += e;
-        } else if entry.elevation_deg.abs() >= 20 {
+        } else if entry.elevation_deg.abs() >= 20.0 {
             height += e;
-        } else if entry.azimuth_deg.abs() <= 45 {
+        } else if entry.azimuth_deg.abs() <= 45.0 {
             front += e;
         } else {
             rear += e;
@@ -403,4 +447,152 @@ fn correlation(a: &[f32], b: &[f32]) -> f32 {
     } else {
         num / (da.sqrt() * db.sqrt())
     }
+}
+
+fn first_arrival_sample(ir: &[f32]) -> Option<usize> {
+    if ir.is_empty() {
+        return None;
+    }
+    let peak = ir.iter().fold(0.0f32, |m, &v| m.max(v.abs()));
+    if peak <= 1e-9 {
+        return None;
+    }
+    let thresh = peak * 0.1;
+    ir.iter().position(|x| x.abs() >= thresh)
+}
+
+fn arrival_spread_metrics(
+    channels: &[Vec<f32>],
+    sample_rate: u32,
+) -> (Option<f32>, Option<f32>, Option<f32>) {
+    let arrivals: Vec<f32> = channels
+        .iter()
+        .filter_map(|ch| first_arrival_sample(ch).map(|i| i as f32 * 1000.0 / sample_rate as f32))
+        .collect();
+    if arrivals.is_empty() {
+        return (None, None, None);
+    }
+    let min_ms = arrivals
+        .iter()
+        .fold(f32::INFINITY, |m, &v| if v < m { v } else { m });
+    let max_ms = arrivals
+        .iter()
+        .fold(f32::NEG_INFINITY, |m, &v| if v > m { v } else { m });
+    let mean = arrivals.iter().sum::<f32>() / arrivals.len() as f32;
+    let var = arrivals
+        .iter()
+        .map(|v| {
+            let d = *v - mean;
+            d * d
+        })
+        .sum::<f32>()
+        / arrivals.len() as f32;
+    (Some(min_ms), Some(max_ms), Some(var.sqrt()))
+}
+
+fn estimate_itd_iacc(
+    a: &[f32],
+    b: &[f32],
+    sample_rate: u32,
+    early_window_s: f32,
+    lag_window_s: f32,
+) -> Option<(f32, f32)> {
+    let n = a.len().min(b.len());
+    if n < 32 {
+        return None;
+    }
+    let window = ((early_window_s * sample_rate as f32).round() as usize).clamp(32, n);
+    let max_lag = ((lag_window_s * sample_rate as f32).round() as isize).max(1);
+
+    let mut best_lag = 0isize;
+    let mut best_corr_abs = 0.0f32;
+
+    for lag in -max_lag..=max_lag {
+        let lag_abs = lag.unsigned_abs();
+        if lag_abs >= window {
+            continue;
+        }
+        let len = window - lag_abs;
+        if len < 16 {
+            continue;
+        }
+        let (sa, sb) = if lag >= 0 {
+            (&a[lag as usize..lag as usize + len], &b[..len])
+        } else {
+            (&a[..len], &b[(-lag) as usize..(-lag) as usize + len])
+        };
+        let c = correlation(sa, sb).abs();
+        if c > best_corr_abs {
+            best_corr_abs = c;
+            best_lag = lag;
+        }
+    }
+
+    Some((best_lag as f32 * 1000.0 / sample_rate as f32, best_corr_abs))
+}
+
+#[allow(clippy::type_complexity)]
+fn inter_channel_itd_iacc_metrics(
+    channels: &[Vec<f32>],
+    sample_rate: u32,
+    early_window_s: f32,
+    lag_window_s: f32,
+    max_pairs: usize,
+) -> (
+    Option<f32>,
+    Option<f32>,
+    Option<f32>,
+    Option<f32>,
+    usize,
+    usize,
+) {
+    let c = channels.len();
+    if c < 2 {
+        return (None, None, None, None, 0, 0);
+    }
+    let total_pairs = c * (c - 1) / 2;
+    let mut sampled = 0usize;
+    let mut itd_abs = Vec::new();
+    let mut iacc = Vec::new();
+
+    'pairs: for i in 0..c {
+        for j in (i + 1)..c {
+            if sampled >= max_pairs {
+                break 'pairs;
+            }
+            if let Some((lag_ms, iacc_v)) = estimate_itd_iacc(
+                &channels[i],
+                &channels[j],
+                sample_rate,
+                early_window_s,
+                lag_window_s,
+            ) {
+                itd_abs.push(lag_ms.abs());
+                iacc.push(iacc_v);
+                sampled += 1;
+            }
+        }
+    }
+
+    if sampled == 0 {
+        return (None, None, None, None, 0, total_pairs);
+    }
+
+    let itd_mean = itd_abs.iter().sum::<f32>() / itd_abs.len() as f32;
+    let itd_max = itd_abs
+        .iter()
+        .fold(0.0f32, |m, &v| if v > m { v } else { m });
+    let iacc_mean = iacc.iter().sum::<f32>() / iacc.len() as f32;
+    let iacc_min = iacc
+        .iter()
+        .fold(f32::INFINITY, |m, &v| if v < m { v } else { m });
+
+    (
+        Some(itd_mean),
+        Some(itd_max),
+        Some(iacc_mean),
+        Some(iacc_min),
+        sampled,
+        total_pairs,
+    )
 }

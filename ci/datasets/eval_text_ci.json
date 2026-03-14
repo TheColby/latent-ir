@@ -1,0 +1,29 @@
+[
+  {
+    "prompt": "massive grain silo made of poured concrete",
+    "descriptor": {
+      "time": {"duration": 20.0, "predelay_ms": 52.0, "t60": 26.5, "edt": 12.0, "attack_gap_ms": 8.0},
+      "spectral": {"brightness": 0.24, "hf_damping": 0.74, "lf_bloom": 0.72, "spectral_tilt": -0.58, "band_decay_low": 1.85, "band_decay_mid": 1.42, "band_decay_high": 0.58},
+      "structural": {"early_density": 0.24, "late_density": 0.97, "diffusion": 0.76, "modal_density": 0.88, "tail_noise": 0.18, "grain": 0.36},
+      "spatial": {"channel_format": "stereo", "width": 0.86, "decorrelation": 0.72, "asymmetry": 0.02}
+    }
+  },
+  {
+    "prompt": "reinforced concrete bunker, dark and heavy",
+    "descriptor": {
+      "time": {"duration": 6.4, "predelay_ms": 16.0, "t60": 3.9, "edt": 2.5, "attack_gap_ms": 4.5},
+      "spectral": {"brightness": 0.22, "hf_damping": 0.68, "lf_bloom": 0.62, "spectral_tilt": -0.46, "band_decay_low": 1.55, "band_decay_mid": 1.18, "band_decay_high": 0.62},
+      "structural": {"early_density": 0.34, "late_density": 0.82, "diffusion": 0.62, "modal_density": 0.86, "tail_noise": 0.19, "grain": 0.34},
+      "spatial": {"channel_format": "stereo", "width": 0.58, "decorrelation": 0.44, "asymmetry": -0.03}
+    }
+  },
+  {
+    "prompt": "steel pipeline tunnel with ringing reflections",
+    "descriptor": {
+      "time": {"duration": 10.0, "predelay_ms": 30.0, "t60": 6.8, "edt": 4.4, "attack_gap_ms": 5.0},
+      "spectral": {"brightness": 0.78, "hf_damping": 0.24, "lf_bloom": 0.48, "spectral_tilt": 0.18, "band_decay_low": 1.30, "band_decay_mid": 1.08, "band_decay_high": 1.02},
+      "structural": {"early_density": 0.32, "late_density": 0.84, "diffusion": 0.56, "modal_density": 0.86, "tail_noise": 0.25, "grain": 0.46},
+      "spatial": {"channel_format": "stereo", "width": 0.72, "decorrelation": 0.58, "asymmetry": 0.0}
+    }
+  }
+]

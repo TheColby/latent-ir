@@ -131,3 +131,48 @@ fn eval_audio_writes_baseline_report() {
     assert!(v["sample_count"].as_u64().unwrap_or(0) >= 2);
     assert!(v["analysis_metrics"]["per_metric_mae"].is_object());
 }
+
+#[test]
+fn eval_check_detects_regression() {
+    let dir = tempdir().expect("tempdir");
+    let baseline = dir.path().join("eval_baseline.json");
+    let report = dir.path().join("eval_report.json");
+
+    let base = json!({
+      "schema_version": "latent-ir.eval.baseline.v1",
+      "command": "eval text",
+      "generated_at_utc": "2026-03-10T00:00:00Z",
+      "dataset_path": "x",
+      "model_path": "m",
+      "sample_count": 2,
+      "descriptor_metrics": {"mae": 0.1, "rmse": 0.1, "per_field_mae": {"t60": 0.1}},
+      "analysis_metrics": {"mae": 0.1, "rmse": 0.1, "per_metric_mae": {"t60_s_est": 0.1}}
+    });
+    let bad = json!({
+      "schema_version": "latent-ir.eval.baseline.v1",
+      "command": "eval text",
+      "generated_at_utc": "2026-03-10T00:00:00Z",
+      "dataset_path": "x",
+      "model_path": "m",
+      "sample_count": 2,
+      "descriptor_metrics": {"mae": 0.2, "rmse": 0.2, "per_field_mae": {"t60": 0.2}},
+      "analysis_metrics": {"mae": 0.2, "rmse": 0.2, "per_metric_mae": {"t60_s_est": 0.2}}
+    });
+    std::fs::write(&baseline, serde_json::to_string_pretty(&base).unwrap()).unwrap();
+    std::fs::write(&report, serde_json::to_string_pretty(&bad).unwrap()).unwrap();
+
+    let cli = Cli::try_parse_from([
+        "latent-ir",
+        "eval",
+        "check",
+        "--report",
+        report.to_str().unwrap(),
+        "--baseline",
+        baseline.to_str().unwrap(),
+        "--max-regression",
+        "0.05",
+    ])
+    .unwrap();
+
+    assert!(dispatch(cli).is_err());
+}

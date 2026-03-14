@@ -1,0 +1,51 @@
+{
+  "schema_version": "latent-ir.eval.baseline.v1",
+  "command": "eval text",
+  "generated_at_utc": "2026-03-10T21:04:41.456677Z",
+  "dataset_path": "ci/datasets/eval_text_ci.json",
+  "model_path": "examples/models/text_encoder_v1.json",
+  "sample_count": 3,
+  "descriptor_metrics": {
+    "mae": 2.1064143,
+    "rmse": 6.2510905,
+    "per_field_mae": {
+      "asymmetry": 0.017516667,
+      "band_decay_high": 0.17722224,
+      "band_decay_low": 0.36793327,
+      "band_decay_mid": 0.22653888,
+      "brightness": 0.2687611,
+      "decorrelation": 0.17853332,
+      "diffusion": 0.07103888,
+      "duration": 8.633789,
+      "early_density": 0.09073333,
+      "edt": 4.516989,
+      "grain": 0.18181668,
+      "hf_damping": 0.2272889,
+      "late_density": 0.15622221,
+      "lf_bloom": 0.1587889,
+      "modal_density": 0.30578887,
+      "predelay_ms": 16.043444,
+      "spectral_tilt": 0.33695555,
+      "t60": 10.030178,
+      "tail_noise": 0.04505555,
+      "width": 0.093688905
+    }
+  },
+  "analysis_metrics": {
+    "mae": 13.995438,
+    "rmse": 49.429527,
+    "per_metric_mae": {
+      "duration_s": 8.633792,
+      "early_energy_ratio": 0.26559237,
+      "edt_s_est": 2.6475816,
+      "late_energy_ratio": 0.26559243,
+      "peak": 0.06995028,
+      "predelay_ms_est": 0.2847222,
+      "rms": 0.020457717,
+      "spectral_centroid_hz": 122.25553,
+      "t20_s_est": 5.1799884,
+      "t30_s_est": 7.1632996,
+      "t60_s_est": 7.1632996
+    }
+  }
+}

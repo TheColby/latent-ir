@@ -3,4 +3,5 @@
 *.json
 !examples/*.json
 !examples/layouts/*.json
+!ci/**/*.json
 .DS_Store
