@@ -12,6 +12,7 @@
 - `benchmark trend`
 - spatial corpus tests
 - streaming render QA tests
+- dataset verify smoke gate
 
 ## What Each Tool Does
 
@@ -119,6 +120,8 @@ Checks include:
 ```
 
 This mirrors `.github/workflows/regression-gates.yml`.
+
+Current gate flow also runs a synthetic `dataset synthesize -> dataset split --lock-hashes -> dataset verify` smoke check to catch integrity/leakage regressions in dataset tooling.
 
 ## Operational Recommendation
 

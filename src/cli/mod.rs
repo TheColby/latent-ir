@@ -461,6 +461,8 @@ pub enum DatasetMode {
     Synthesize(DatasetSynthesizeArgs),
     /// Create deterministic train/val/test splits with optional hash locks.
     Split(DatasetSplitArgs),
+    /// Verify split integrity (file existence, hash locks, overlap/leakage checks).
+    Verify(DatasetVerifyArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -547,6 +549,19 @@ pub struct DatasetSplitArgs {
     /// Emit split-specific train-encoder datasets (`*_text.json`, `*_audio.json`).
     #[arg(long, default_value_t = false)]
     pub emit_training_json: bool,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct DatasetVerifyArgs {
+    /// Input split manifest JSON (`latent-ir.dataset-split.v1`).
+    #[arg(long)]
+    pub split_manifest: PathBuf,
+    /// Optional JSON verification report output path.
+    #[arg(short, long)]
+    pub output: Option<PathBuf>,
+    /// Require zero overlapping prompts across train/val/test splits.
+    #[arg(long, default_value_t = false)]
+    pub fail_on_prompt_overlap: bool,
 }
 
 #[derive(Debug, Clone, Subcommand)]

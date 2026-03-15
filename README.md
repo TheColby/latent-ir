@@ -34,7 +34,7 @@ Most reverb workflows are static: fixed presets, fixed measured IR libraries, or
 
 - Commands: `generate`, `analyze`, `morph`, `render`, `sample`, `preset`, `dataset`
 - Learned tooling: `train-encoder`, `eval`, `benchmark`, `model validate`, `ab-test`
-- AI research tooling: `dataset synth` / `dataset split` for reproducible corpus generation and hash-locked train/val/test splits
+- AI research tooling: `dataset synth` / `dataset split` / `dataset verify` for reproducible corpus generation, hash-locked train/val/test splits, and leakage/integrity checks
 - Canonical descriptor model (`DescriptorSet`) across time/spectral/structural/spatial domains
 - Deterministic procedural IR generation with seed control
 - Tail-protection guardrail in `generate` (opt out with `--allow-tail-truncation`)
@@ -184,6 +184,15 @@ cargo run -- dataset split \
   --lock-hashes --emit-training-json
 ```
 
+Verify split integrity and leakage constraints:
+
+```bash
+cargo run -- dataset verify \
+  --split-manifest out/research_dataset/split.dataset.json \
+  --fail-on-prompt-overlap \
+  --output out/research_dataset/verify.dataset.json
+```
+
 ## Spatial Examples
 
 FOA (ambiX):
@@ -266,6 +275,10 @@ Metadata includes:
   - creates deterministic train/val/test manifests with configurable ratios
   - optional hash-locking reads per-sample metadata hashes into split records
   - optional split-specific train-encoder JSON exports
+- `dataset verify`
+  - validates split integrity (missing files, hash mismatches, split ID overlap)
+  - can fail on prompt overlap (`--fail-on-prompt-overlap`) for stricter anti-leakage policy
+  - writes machine-readable verification report (`latent-ir.dataset-verify.v1`)
 - `benchmark trend`
   - builds Markdown + JSON trend dashboards from multiple benchmark reports
 - `eval text` / `eval audio`
@@ -282,11 +295,11 @@ Metadata includes:
 3. “I can’t reproduce or verify artifacts exactly.”
 - Metadata includes replay command, full conditioning trace, and reproducibility hashes for IR/descriptor/channel-map payloads.
 
-4. “There is no machine-checkable quality bar before release.”
-- `generate` and `analyze` now support quality gates with `lenient`, `launch`, and `strict` profiles and non-zero exit on failure.
+4. “Split leakage and dataset integrity aren’t enforced.”
+- `dataset verify` now checks split IDs, prompt overlap, missing artifacts, and hash-lock mismatches (`--fail-on-prompt-overlap` for strict mode).
 
-5. “Sample-rate mismatch handling is either brittle or low quality.”
-- `render`/`morph` support optional auto-resampling with selectable mode (`linear` or `cubic`).
+5. “There is no machine-checkable quality bar before release.”
+- `generate` and `analyze` support quality gates with `lenient`, `launch`, and `strict` profiles and non-zero exit on failure.
 
 ## Demo Pack
 

@@ -105,3 +105,22 @@ pub struct DatasetSplitRecord {
     pub descriptor_sha256: Option<String>,
     pub channel_map_sha256: Option<String>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatasetVerifyReport {
+    pub schema_version: String,
+    pub project: String,
+    pub version: String,
+    pub generated_at_utc: DateTime<Utc>,
+    pub split_manifest_path: String,
+    pub hash_locked: bool,
+    pub total_records: usize,
+    pub file_missing_count: usize,
+    pub hash_mismatch_count: usize,
+    pub id_overlap_count: usize,
+    pub prompt_overlap_count: usize,
+    pub prompt_overlap_examples: Vec<String>,
+    pub passed: bool,
+    pub failures: Vec<String>,
+    pub warnings: Vec<String>,
+}

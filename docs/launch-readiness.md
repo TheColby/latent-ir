@@ -50,8 +50,10 @@ This document is a practical pre-launch checklist for public announcements.
 10. Can we verify artifacts weren’t silently changed?
 - Compare metadata fingerprints: `ir_sha256`, `descriptor_sha256`, `channel_map_sha256`.
 - Include these in release notes or demo-pack manifests.
+- Run `dataset verify` on split manifests to check missing files, hash mismatches, and split overlap.
+- Use `--fail-on-prompt-overlap` when leakage must block release.
 
-9. PATH/install issues?
+11. PATH/install issues?
 - Use `./scripts/install_local.sh`.
 - Ensure `$HOME/.cargo/bin` (or custom `$CARGO_HOME/bin`) is on `PATH`.
 
@@ -64,6 +66,7 @@ This document is a practical pre-launch checklist for public announcements.
 - exact command lines used
 - quality-gate profile + pass/fail output
 - metadata fingerprint values for each published artifact
+- dataset verification report when sharing training/eval corpus claims
 
 ## Suggested Scope-Honesty Blurb
 

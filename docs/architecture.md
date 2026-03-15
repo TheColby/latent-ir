@@ -127,6 +127,7 @@ Artifacts:
 - channel map JSON (`latent-ir.channel-map.v1`)
 - dataset manifest JSON (`latent-ir.dataset.v1`) for corpus workflows
 - dataset split manifest JSON (`latent-ir.dataset-split.v1`) for train/val/test versioning
+- dataset verification report JSON (`latent-ir.dataset-verify.v1`) for integrity/leakage gates
 
 Generation metadata includes:
 - replay command string
@@ -159,6 +160,11 @@ Outputs can include `training_text.json` and `training_audio.json` compatible wi
 - seed-stable shuffle
 - optional hash-locks against per-sample metadata
 - optional split-specific training JSON exports
+
+`dataset verify` enforces split-integrity constraints:
+- missing-file checks for IR/metadata/analysis artifacts
+- hash mismatch checks for hash-locked splits
+- split overlap checks (IDs and optional prompt overlap hard-fail)
 
 ## Trajectory Controls
 

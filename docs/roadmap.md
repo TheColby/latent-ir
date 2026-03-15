@@ -54,6 +54,10 @@ Delivered so far:
   - deterministic train/val/test split manifests (`latent-ir.dataset-split.v1`)
   - optional hash-locking with per-sample metadata hashes
   - optional split-specific train-encoder JSON exports
+- dataset integrity verification tooling
+  - `dataset verify` report schema (`latent-ir.dataset-verify.v1`)
+  - missing file / hash mismatch checks for hash-locked splits
+  - split overlap checks (ID + optional prompt leakage enforcement)
 - conditioning confidence/uncertainty propagation
   - generation metadata includes conditioning uncertainty summaries
   - eval reports include uncertainty metrics (`mean_confidence`, `mean_uncertainty`)

@@ -7,12 +7,13 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::cli::{
     ChannelFormatArg, DatasetArgs, DatasetMode, DatasetSplitArgs, DatasetSynthesizeArgs,
-    QualityProfileArg,
+    DatasetVerifyArgs, QualityProfileArg,
 };
 use crate::core::analysis::{evaluate_quality_gate, IrAnalyzer, QualityProfile};
 use crate::core::dataset::{
     DatasetConfigSnapshot, DatasetManifest, DatasetRecord, DatasetSplitCounts,
     DatasetSplitManifest, DatasetSplitRatios, DatasetSplitRecord, DatasetSummary,
+    DatasetVerifyReport,
 };
 use crate::core::descriptors::{ChannelFormat, DescriptorSet};
 use crate::core::generator::{IrGenerator, ProceduralIrGenerator};
@@ -29,6 +30,7 @@ pub fn run(args: DatasetArgs) -> Result<()> {
     match args.mode {
         DatasetMode::Synthesize(cfg) => run_synthesize(cfg),
         DatasetMode::Split(cfg) => run_split(cfg),
+        DatasetMode::Verify(cfg) => run_verify(cfg),
     }
 }
 
@@ -459,6 +461,202 @@ fn run_split(args: DatasetSplitArgs) -> Result<()> {
     Ok(())
 }
 
+fn run_verify(args: DatasetVerifyArgs) -> Result<()> {
+    let text = std::fs::read_to_string(&args.split_manifest)
+        .with_context(|| format!("failed to read {}", args.split_manifest.display()))?;
+    let split: DatasetSplitManifest =
+        serde_json::from_str(&text).with_context(|| "failed to parse split manifest JSON")?;
+    anyhow::ensure!(
+        split.schema_version == "latent-ir.dataset-split.v1",
+        "unsupported split manifest schema: {}",
+        split.schema_version
+    );
+    let root = args
+        .split_manifest
+        .parent()
+        .unwrap_or_else(|| Path::new("."));
+
+    let mut failures = Vec::new();
+    let mut warnings = Vec::new();
+    let mut file_missing_count = 0usize;
+    let mut hash_mismatch_count = 0usize;
+
+    let mut train_ids = std::collections::BTreeSet::new();
+    let mut val_ids = std::collections::BTreeSet::new();
+    let mut test_ids = std::collections::BTreeSet::new();
+    let mut train_prompts = std::collections::BTreeSet::new();
+    let mut val_prompts = std::collections::BTreeSet::new();
+    let mut test_prompts = std::collections::BTreeSet::new();
+
+    for rec in &split.train {
+        train_ids.insert(rec.id.clone());
+        train_prompts.insert(normalize_prompt_key(&rec.prompt));
+    }
+    for rec in &split.val {
+        val_ids.insert(rec.id.clone());
+        val_prompts.insert(normalize_prompt_key(&rec.prompt));
+    }
+    for rec in &split.test {
+        test_ids.insert(rec.id.clone());
+        test_prompts.insert(normalize_prompt_key(&rec.prompt));
+    }
+
+    let id_overlap_count = count_set_intersection(&train_ids, &val_ids)
+        + count_set_intersection(&train_ids, &test_ids)
+        + count_set_intersection(&val_ids, &test_ids);
+    if id_overlap_count > 0 {
+        failures.push(format!(
+            "split id overlap detected across subsets (count={id_overlap_count})"
+        ));
+    }
+
+    let mut prompt_overlap_examples = Vec::new();
+    collect_overlap_examples(
+        &train_prompts,
+        &val_prompts,
+        "train/val",
+        &mut prompt_overlap_examples,
+    );
+    collect_overlap_examples(
+        &train_prompts,
+        &test_prompts,
+        "train/test",
+        &mut prompt_overlap_examples,
+    );
+    collect_overlap_examples(
+        &val_prompts,
+        &test_prompts,
+        "val/test",
+        &mut prompt_overlap_examples,
+    );
+    let prompt_overlap_count = prompt_overlap_examples.len();
+    if prompt_overlap_count > 0 {
+        let msg =
+            format!("prompt overlap detected across splits (examples={prompt_overlap_count})");
+        if args.fail_on_prompt_overlap {
+            failures.push(msg);
+        } else {
+            warnings.push(msg);
+        }
+    }
+
+    for (split_name, rec) in iter_split_records(&split) {
+        let ir_path = root.join(&rec.ir_wav);
+        let meta_path = root.join(&rec.metadata_json);
+        let analysis_path = root.join(&rec.analysis_json);
+        for (kind, path) in [
+            ("ir", ir_path),
+            ("metadata", meta_path.clone()),
+            ("analysis", analysis_path),
+        ] {
+            if !path.exists() {
+                file_missing_count += 1;
+                failures.push(format!(
+                    "{split_name}/{} missing {kind} file: {}",
+                    rec.id,
+                    path.display()
+                ));
+            }
+        }
+
+        if split.hash_locked {
+            match std::fs::read_to_string(&meta_path)
+                .ok()
+                .and_then(|s| serde_json::from_str::<GenerationMetadata>(&s).ok())
+            {
+                Some(meta) => {
+                    if rec.ir_sha256.as_deref() != Some(meta.ir_sha256.as_str()) {
+                        hash_mismatch_count += 1;
+                        failures.push(format!("{split_name}/{} ir_sha256 mismatch", rec.id));
+                    }
+                    if rec.descriptor_sha256.as_deref() != Some(meta.descriptor_sha256.as_str()) {
+                        hash_mismatch_count += 1;
+                        failures.push(format!(
+                            "{split_name}/{} descriptor_sha256 mismatch",
+                            rec.id
+                        ));
+                    }
+                    if rec.channel_map_sha256.as_deref() != Some(meta.channel_map_sha256.as_str()) {
+                        hash_mismatch_count += 1;
+                        failures.push(format!(
+                            "{split_name}/{} channel_map_sha256 mismatch",
+                            rec.id
+                        ));
+                    }
+                }
+                None => {
+                    hash_mismatch_count += 1;
+                    failures.push(format!(
+                        "{split_name}/{} failed to parse metadata for hash verification",
+                        rec.id
+                    ));
+                }
+            }
+        }
+    }
+
+    let total_records = split.train.len() + split.val.len() + split.test.len();
+    let passed = failures.is_empty();
+    let report = DatasetVerifyReport {
+        schema_version: "latent-ir.dataset-verify.v1".to_string(),
+        project: "latent-ir".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        generated_at_utc: Utc::now(),
+        split_manifest_path: args.split_manifest.display().to_string(),
+        hash_locked: split.hash_locked,
+        total_records,
+        file_missing_count,
+        hash_mismatch_count,
+        id_overlap_count,
+        prompt_overlap_count,
+        prompt_overlap_examples,
+        passed,
+        failures: failures.clone(),
+        warnings: warnings.clone(),
+    };
+
+    if let Some(path) = args.output.as_deref() {
+        util::json::write_pretty_json(path, &report)?;
+    }
+
+    println!("{}", util::console::metric("verify_passed", report.passed));
+    println!(
+        "{}",
+        util::console::metric("total_records", report.total_records)
+    );
+    println!(
+        "{}",
+        util::console::metric("file_missing_count", report.file_missing_count)
+    );
+    println!(
+        "{}",
+        util::console::metric("hash_mismatch_count", report.hash_mismatch_count)
+    );
+    println!(
+        "{}",
+        util::console::metric("id_overlap_count", report.id_overlap_count)
+    );
+    println!(
+        "{}",
+        util::console::metric("prompt_overlap_count", report.prompt_overlap_count)
+    );
+
+    if !report.warnings.is_empty() {
+        println!("{}", util::console::warning("warnings:"));
+        for w in &report.warnings {
+            println!("  {}", util::console::warning(&format!("- {w}")));
+        }
+    }
+
+    if !report.passed {
+        for f in &report.failures {
+            eprintln!("{}", util::console::error(&format!("verify_failure: {f}")));
+        }
+        anyhow::bail!("dataset verification failed");
+    }
+    Ok(())
+}
+
 fn write_split_training_json(
     text_path: impl AsRef<Path>,
     audio_path: impl AsRef<Path>,
@@ -494,6 +692,40 @@ fn validate_split_args(args: &DatasetSplitArgs) -> Result<()> {
     let sum = args.train_ratio + args.val_ratio + args.test_ratio;
     anyhow::ensure!((sum - 1.0).abs() <= 1e-3, "split ratios must sum to 1.0");
     Ok(())
+}
+
+fn iter_split_records(split: &DatasetSplitManifest) -> Vec<(&'static str, &DatasetSplitRecord)> {
+    let mut out = Vec::with_capacity(split.train.len() + split.val.len() + split.test.len());
+    out.extend(split.train.iter().map(|r| ("train", r)));
+    out.extend(split.val.iter().map(|r| ("val", r)));
+    out.extend(split.test.iter().map(|r| ("test", r)));
+    out
+}
+
+fn normalize_prompt_key(prompt: &str) -> String {
+    prompt
+        .to_ascii_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn count_set_intersection(
+    a: &std::collections::BTreeSet<String>,
+    b: &std::collections::BTreeSet<String>,
+) -> usize {
+    a.intersection(b).count()
+}
+
+fn collect_overlap_examples(
+    a: &std::collections::BTreeSet<String>,
+    b: &std::collections::BTreeSet<String>,
+    label: &str,
+    out: &mut Vec<String>,
+) {
+    for v in a.intersection(b).take(5) {
+        out.push(format!("{label}:{v}"));
+    }
 }
 
 fn validate_args(args: &DatasetSynthesizeArgs) -> Result<()> {

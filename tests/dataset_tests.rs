@@ -205,3 +205,239 @@ fn dataset_split_writes_hash_locked_manifest_and_split_training_exports() {
     assert!(out_dir.join("val_text.json").exists());
     assert!(out_dir.join("test_audio.json").exists());
 }
+
+#[test]
+fn dataset_verify_passes_for_fresh_hash_locked_split() {
+    let dir = tempdir().expect("tempdir");
+    let out_dir = dir.path().join("dataset");
+
+    let synth = Cli::try_parse_from([
+        "latent-ir",
+        "dataset",
+        "synthesize",
+        "--out-dir",
+        out_dir.to_str().expect("utf8"),
+        "--count",
+        "6",
+        "--seed",
+        "321",
+        "--sample-rate",
+        "8000",
+        "--channels",
+        "mono",
+        "--duration-min",
+        "0.1",
+        "--duration-max",
+        "0.12",
+        "--t60-min",
+        "0.2",
+        "--t60-max",
+        "0.25",
+        "--predelay-max-ms",
+        "5",
+    ])
+    .expect("parse synth");
+    dispatch(synth).expect("synth should pass");
+
+    let split_path = out_dir.join("split.dataset.json");
+    let split = Cli::try_parse_from([
+        "latent-ir",
+        "dataset",
+        "split",
+        "--manifest",
+        out_dir
+            .join("manifest.dataset.json")
+            .to_str()
+            .expect("utf8 manifest"),
+        "--output",
+        split_path.to_str().expect("utf8 split"),
+        "--seed",
+        "99",
+        "--train-ratio",
+        "0.8",
+        "--val-ratio",
+        "0.1",
+        "--test-ratio",
+        "0.1",
+        "--lock-hashes",
+    ])
+    .expect("parse split");
+    dispatch(split).expect("split should pass");
+
+    let verify_json = out_dir.join("verify.json");
+    let verify = Cli::try_parse_from([
+        "latent-ir",
+        "dataset",
+        "verify",
+        "--split-manifest",
+        split_path.to_str().expect("utf8"),
+        "--output",
+        verify_json.to_str().expect("utf8"),
+    ])
+    .expect("parse verify");
+    dispatch(verify).expect("verify should pass");
+
+    let report: Value =
+        serde_json::from_str(&std::fs::read_to_string(verify_json).expect("verify text"))
+            .expect("verify json");
+    assert_eq!(report["schema_version"], "latent-ir.dataset-verify.v1");
+    assert_eq!(report["passed"], true);
+    assert_eq!(report["hash_locked"], true);
+}
+
+#[test]
+fn dataset_verify_fails_when_prompt_overlap_is_forbidden() {
+    let dir = tempdir().expect("tempdir");
+    let out_dir = dir.path().join("dataset");
+    let prompt_bank = dir.path().join("prompts.json");
+    std::fs::write(&prompt_bank, r#"["single repeated prompt"]"#).expect("write prompt bank");
+
+    let synth = Cli::try_parse_from([
+        "latent-ir",
+        "dataset",
+        "synthesize",
+        "--out-dir",
+        out_dir.to_str().expect("utf8"),
+        "--count",
+        "9",
+        "--seed",
+        "321",
+        "--sample-rate",
+        "8000",
+        "--channels",
+        "mono",
+        "--duration-min",
+        "0.1",
+        "--duration-max",
+        "0.12",
+        "--t60-min",
+        "0.2",
+        "--t60-max",
+        "0.25",
+        "--predelay-max-ms",
+        "5",
+        "--preset-mix",
+        "0.0",
+        "--prompt-bank-json",
+        prompt_bank.to_str().expect("utf8"),
+    ])
+    .expect("parse synth");
+    dispatch(synth).expect("synth should pass");
+
+    let split_path = out_dir.join("split.dataset.json");
+    let split = Cli::try_parse_from([
+        "latent-ir",
+        "dataset",
+        "split",
+        "--manifest",
+        out_dir
+            .join("manifest.dataset.json")
+            .to_str()
+            .expect("utf8 manifest"),
+        "--output",
+        split_path.to_str().expect("utf8 split"),
+        "--seed",
+        "99",
+        "--train-ratio",
+        "0.8",
+        "--val-ratio",
+        "0.1",
+        "--test-ratio",
+        "0.1",
+        "--lock-hashes",
+    ])
+    .expect("parse split");
+    dispatch(split).expect("split should pass");
+
+    let verify = Cli::try_parse_from([
+        "latent-ir",
+        "dataset",
+        "verify",
+        "--split-manifest",
+        split_path.to_str().expect("utf8"),
+        "--fail-on-prompt-overlap",
+    ])
+    .expect("parse verify");
+    let err = dispatch(verify).expect_err("verify should fail");
+    assert!(format!("{err:#}").contains("dataset verification failed"));
+}
+
+#[test]
+fn dataset_verify_fails_on_hash_mismatch() {
+    let dir = tempdir().expect("tempdir");
+    let out_dir = dir.path().join("dataset");
+
+    let synth = Cli::try_parse_from([
+        "latent-ir",
+        "dataset",
+        "synthesize",
+        "--out-dir",
+        out_dir.to_str().expect("utf8"),
+        "--count",
+        "6",
+        "--seed",
+        "321",
+        "--sample-rate",
+        "8000",
+        "--channels",
+        "mono",
+        "--duration-min",
+        "0.1",
+        "--duration-max",
+        "0.12",
+        "--t60-min",
+        "0.2",
+        "--t60-max",
+        "0.25",
+        "--predelay-max-ms",
+        "5",
+    ])
+    .expect("parse synth");
+    dispatch(synth).expect("synth should pass");
+
+    let split_path = out_dir.join("split.dataset.json");
+    let split = Cli::try_parse_from([
+        "latent-ir",
+        "dataset",
+        "split",
+        "--manifest",
+        out_dir
+            .join("manifest.dataset.json")
+            .to_str()
+            .expect("utf8 manifest"),
+        "--output",
+        split_path.to_str().expect("utf8 split"),
+        "--seed",
+        "99",
+        "--train-ratio",
+        "0.8",
+        "--val-ratio",
+        "0.1",
+        "--test-ratio",
+        "0.1",
+        "--lock-hashes",
+    ])
+    .expect("parse split");
+    dispatch(split).expect("split should pass");
+
+    let mut split_json: Value =
+        serde_json::from_str(&std::fs::read_to_string(&split_path).expect("split text"))
+            .expect("split json");
+    split_json["train"][0]["ir_sha256"] = Value::String("bad_hash".to_string());
+    std::fs::write(
+        &split_path,
+        serde_json::to_string_pretty(&split_json).expect("serialize split"),
+    )
+    .expect("write split");
+
+    let verify = Cli::try_parse_from([
+        "latent-ir",
+        "dataset",
+        "verify",
+        "--split-manifest",
+        split_path.to_str().expect("utf8"),
+    ])
+    .expect("parse verify");
+    let err = dispatch(verify).expect_err("verify should fail");
+    assert!(format!("{err:#}").contains("dataset verification failed"));
+}

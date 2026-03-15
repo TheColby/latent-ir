@@ -18,6 +18,15 @@ latent-ir dataset split \
   --lock-hashes
 ```
 
+Companion verify command:
+
+```bash
+latent-ir dataset verify \
+  --split-manifest out/research_dataset/split.dataset.json \
+  --fail-on-prompt-overlap \
+  --output out/research_dataset/verify.dataset.json
+```
+
 ## What It Produces
 
 By default, each synthesized sample writes:
@@ -29,6 +38,7 @@ By default, each synthesized sample writes:
 Dataset-level artifact:
 - `manifest.dataset.json` (`latent-ir.dataset.v1`)
 - `split.dataset.json` (`latent-ir.dataset-split.v1`)
+- `verify.dataset.json` (`latent-ir.dataset-verify.v1`, optional)
 
 Optional exports (`--export-training-json`):
 - `training_text.json` for prompt->descriptor training
@@ -65,6 +75,11 @@ These export formats are directly compatible with:
 - run `dataset split --lock-hashes`
 - split records include per-sample metadata hashes (`ir_sha256`, `descriptor_sha256`, `channel_map_sha256`)
 
+6. Split integrity / leakage gates
+- run `dataset verify --split-manifest ...`
+- checks missing files, hash mismatches, split ID overlap, and prompt overlap
+- add `--fail-on-prompt-overlap` to make prompt leakage release-blocking
+
 ## Important Flags
 
 - `--prompt-bank-json <path>`: JSON string array of prompts
@@ -75,6 +90,9 @@ These export formats are directly compatible with:
 - `--export-training-json`: emit train-encoder-ready files
 - `dataset split --lock-hashes`: embed integrity hashes in split records
 - `dataset split --emit-training-json`: emit split-specific training datasets
+- `dataset verify --split-manifest`: run integrity/leakage checks
+- `dataset verify --fail-on-prompt-overlap`: fail when prompt overlap exists across splits
+- `dataset verify --output`: write machine-readable verification report
 
 ## Example
 
@@ -103,3 +121,4 @@ latent-ir dataset synthesize \
   - analysis report
   - reproducibility hashes in metadata
 - The dataset manifest includes aggregate summary metrics and pass/fail counts.
+- The split verification report captures integrity and leakage status for CI/release gates.
